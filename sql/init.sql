@@ -88,6 +88,33 @@ INSERT INTO `category` (`id`, `user_id`, `name`, `type`, `icon`, `sort_order`, `
 (106, 0, '升学', 2, 'education', 6, 1),
 (107, 0, '其他支出', 2, 'other', 99, 1);
 
+-- 用户Token表
+CREATE TABLE IF NOT EXISTS `user_token` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `user_id` BIGINT NOT NULL COMMENT '用户ID',
+    `token` VARCHAR(500) NOT NULL COMMENT '登录token',
+    `device_type` TINYINT DEFAULT NULL COMMENT '设备类型：1-微信小程序，2-Android，3-iOS，4-Web',
+    `device_name` VARCHAR(100) DEFAULT NULL COMMENT '设备名称',
+    `device_id` VARCHAR(200) DEFAULT NULL COMMENT '设备标识（如设备ID、UUID等）',
+    `ip_address` VARCHAR(50) DEFAULT NULL COMMENT 'IP地址',
+    `user_agent` VARCHAR(500) DEFAULT NULL COMMENT '用户代理（浏览器信息）',
+    `login_time` DATETIME NOT NULL COMMENT '登录时间',
+    `expire_time` DATETIME NOT NULL COMMENT '过期时间',
+    `last_active_time` DATETIME NOT NULL COMMENT '最后活跃时间',
+    `status` TINYINT NOT NULL DEFAULT '1' COMMENT '状态：0-无效，1-有效',
+    `login_count` INT NOT NULL DEFAULT '1' COMMENT '登录次数（同一设备）',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted` TINYINT NOT NULL DEFAULT '0' COMMENT '逻辑删除：0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_token` (`token`),
+    KEY `idx_device_id` (`device_id`),
+    KEY `idx_status` (`status`),
+    KEY `idx_deleted` (`deleted`),
+    KEY `idx_expire_time` (`expire_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户Token表';
+
 -- 操作日志表
 CREATE TABLE IF NOT EXISTS `operation_log` (
     `id` BIGINT NOT NULL COMMENT '日志ID',

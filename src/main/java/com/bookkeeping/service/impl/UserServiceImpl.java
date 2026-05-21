@@ -1,11 +1,13 @@
 package com.bookkeeping.service.impl;
 
+import com.bookkeeping.dto.LoginRequestDTO;
 import com.bookkeeping.dto.UpdateUserDTO;
 import com.bookkeeping.dto.WxLoginDTO;
 import com.bookkeeping.entity.User;
 import com.bookkeeping.exception.BusinessException;
 import com.bookkeeping.mapper.UserMapper;
 import com.bookkeeping.service.UserService;
+import com.bookkeeping.service.UserTokenService;
 import com.bookkeeping.utils.JwtUtil;
 import com.bookkeeping.utils.RedisUtil;
 import com.bookkeeping.vo.LoginVO;
@@ -35,6 +37,7 @@ public class UserServiceImpl implements UserService {
     private final JwtUtil jwtUtil;
     private final RedisUtil redisUtil;
     private final WxMiniAppConfig wxMiniAppConfig;
+    private final UserTokenService userTokenService;
 
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -43,8 +46,20 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public LoginVO wxLogin(WxLoginDTO loginDTO) throws JsonProcessingException {
+        // 调用带设备信息的登录方法，设备信息为空
+        LoginRequestDTO requestDTO = new LoginRequestDTO();
+        requestDTO.setCode(loginDTO.getCode());
+        requestDTO.setNickname(loginDTO.getNickname());
+        requestDTO.setAvatarUrl(loginDTO.getAvatarUrl());
+        requestDTO.setDeviceType(1); // 默认微信小程序
+        return wxLoginWithDevice(requestDTO);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public LoginVO wxLoginWithDevice(LoginRequestDTO loginRequest) throws JsonProcessingException {
         // 1. 调用微信接口获取openid和session_key
-        String url = wxMiniAppConfig.getAuthUrl(loginDTO.getCode());
+        String url = wxMiniAppConfig.getAuthUrl(loginRequest.getCode());
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
 
         if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
@@ -66,22 +81,20 @@ public class UserServiceImpl implements UserService {
         // 2. 根据openid查询或创建用户
         User user = userMapper.selectByOpenid(openid);
         if (user == null) {
-            // 创建新用户
             user = new User();
             user.setOpenid(openid);
             user.setUnionid(sessionVO.getUnionid());
-            user.setNickname(loginDTO.getNickname());
-            user.setAvatarUrl(loginDTO.getAvatarUrl());
+            user.setNickname(loginRequest.getNickname());
+            user.setAvatarUrl(loginRequest.getAvatarUrl());
             user.setStatus(1);
             userMapper.insert(user);
             log.info("创建新用户: userId={}, openid={}", user.getId(), openid);
         } else {
-            // 更新用户信息（如果提供了）
-            if (loginDTO.getNickname() != null && !loginDTO.getNickname().isEmpty()) {
-                user.setNickname(loginDTO.getNickname());
+            if (loginRequest.getNickname() != null && !loginRequest.getNickname().isEmpty()) {
+                user.setNickname(loginRequest.getNickname());
             }
-            if (loginDTO.getAvatarUrl() != null && !loginDTO.getAvatarUrl().isEmpty()) {
-                user.setAvatarUrl(loginDTO.getAvatarUrl());
+            if (loginRequest.getAvatarUrl() != null && !loginRequest.getAvatarUrl().isEmpty()) {
+                user.setAvatarUrl(loginRequest.getAvatarUrl());
             }
             userMapper.updateById(user);
         }
@@ -89,13 +102,25 @@ public class UserServiceImpl implements UserService {
         // 3. 生成token
         String token = jwtUtil.generateToken(user.getId(), openid, user.getRole());
 
-        // 4. 缓存token到Redis
+        // 4. 存储token到数据库（使用UserTokenService）
+        userTokenService.createOrUpdateToken(
+                user.getId(),
+                token,
+                loginRequest.getDeviceType() != null ? loginRequest.getDeviceType() : 1,
+                loginRequest.getDeviceName(),
+                loginRequest.getDeviceId(),
+                loginRequest.getIpAddress(),
+                loginRequest.getUserAgent(),
+                7 // 7天有效期
+        );
+
+        // 5. 缓存token到Redis
         redisUtil.cacheUserToken(user.getId(), token, 7, TimeUnit.DAYS);
 
-        // 5. 组装返回结果
+        // 6. 组装返回结果
         LoginVO loginVO = new LoginVO();
         loginVO.setToken(token);
-        loginVO.setExpiresIn(7 * 24 * 60 * 60L); // 7天
+        loginVO.setExpiresIn(7 * 24 * 60 * 60L);
         loginVO.setUserInfo(convertToUserVO(user));
 
         return loginVO;
@@ -118,7 +143,6 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException("用户不存在");
         }
 
-        // 更新用户信息
         if (updateDTO.getNickname() != null) {
             user.setNickname(updateDTO.getNickname());
         }
@@ -135,8 +159,24 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void logout(Long userId) {
+        // 从Redis获取token
+        String token = redisUtil.getUserToken(userId);
+        if (token != null) {
+            // 使数据库中的token失效
+            userTokenService.invalidateToken(token);
+        }
+        // 清除Redis中的token
         redisUtil.deleteUserToken(userId);
         log.info("用户登出: userId={}", userId);
+    }
+
+    @Override
+    public void forceLogout(Long userId) {
+        // 使用户所有token失效
+        userTokenService.invalidateAllByUserId(userId);
+        // 清除Redis中的token
+        redisUtil.deleteUserToken(userId);
+        log.info("强制用户下线: userId={}", userId);
     }
 
     /**

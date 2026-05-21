@@ -1,5 +1,6 @@
 package com.bookkeeping.service;
 
+import com.bookkeeping.dto.LoginRequestDTO;
 import com.bookkeeping.dto.UpdateUserDTO;
 import com.bookkeeping.dto.WxLoginDTO;
 import com.bookkeeping.vo.LoginVO;
@@ -17,6 +18,11 @@ public interface UserService {
     LoginVO wxLogin(WxLoginDTO loginDTO) throws JsonProcessingException;
 
     /**
+     * 微信小程序登录（带设备信息）
+     */
+    LoginVO wxLoginWithDevice(LoginRequestDTO loginRequest) throws JsonProcessingException;
+
+    /**
      * 获取当前用户信息
      */
     UserVO getCurrentUser(Long userId);
@@ -30,4 +36,9 @@ public interface UserService {
      * 用户登出
      */
     void logout(Long userId);
+
+    /**
+     * 强制用户下线（使所有token失效）
+     */
+    void forceLogout(Long userId);
 }
