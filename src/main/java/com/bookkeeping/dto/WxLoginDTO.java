@@ -4,20 +4,17 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
-/**
- * 微信登录DTO
- */
 @Data
-@Schema(description = "微信登录请求参数")
+@Schema(description = "微信登录DTO")
 public class WxLoginDTO {
 
+    @Schema(description = "微信登录code", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "微信登录code不能为空")
-    @Schema(description = "微信登录临时code", required = true)
     private String code;
 
-    @Schema(description = "用户昵称")
+    @Schema(description = "昵称")
     private String nickname;
 
-    @Schema(description = "头像URL")
+    @Schema(description = "头像地址")
     private String avatarUrl;
 }

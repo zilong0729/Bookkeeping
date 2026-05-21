@@ -5,11 +5,8 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/**
- * 类别VO
- */
 @Data
-@Schema(description = "类别信息")
+@Schema(description = "类别信息VO")
 public class CategoryVO {
 
     @Schema(description = "类别ID")
@@ -18,7 +15,7 @@ public class CategoryVO {
     @Schema(description = "类别名称")
     private String name;
 
-    @Schema(description = "类型：1-收入，2-支出")
+    @Schema(description = "类型：1-支出，2-收入")
     private Integer type;
 
     @Schema(description = "图标")

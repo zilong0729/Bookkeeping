@@ -6,20 +6,17 @@ import lombok.Data;
 
 import java.util.List;
 
-/**
- * 分页返回结果封装
- */
 @Data
 @Schema(description = "分页返回结果")
 public class PageResult<T> {
 
-    @Schema(description = "当前页码")
+    @Schema(description = "当前页")
     private Long current;
 
-    @Schema(description = "每页大小")
+    @Schema(description = "每页条数")
     private Long size;
 
-    @Schema(description = "总记录数")
+    @Schema(description = "总条数")
     private Long total;
 
     @Schema(description = "总页数")
@@ -39,9 +36,6 @@ public class PageResult<T> {
         this.records = records;
     }
 
-    /**
-     * 从MyBatis-Plus的IPage转换
-     */
     public static <T> PageResult<T> from(IPage<T> page) {
         return new PageResult<>(
                 page.getCurrent(),

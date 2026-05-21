@@ -1,12 +1,12 @@
 package com.bookkeeping.aspect;
 
-import com.alibaba.fastjson2.JSON;
 import com.bookkeeping.annotation.OperLog;
 import com.bookkeeping.annotation.RequireAdmin;
 import com.bookkeeping.entity.OperationLog;
 import com.bookkeeping.exception.BusinessException;
 import com.bookkeeping.service.AsyncLogService;
 import com.bookkeeping.utils.UserContext;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +35,7 @@ import java.util.Map;
 public class OperLogAspect {
 
     private final AsyncLogService asyncLogService;
+    private final ObjectMapper objectMapper;
 
     /**
      * 切入点：所有标注了 @OperLog 的方法
@@ -105,7 +106,7 @@ public class OperLogAspect {
                         paramMap.put(paramNames[i], args[i]);
                     }
                 }
-                String params = JSON.toJSONString(paramMap);
+                String params = objectMapper.writeValueAsString(paramMap);
                 // 截断过长的参数
                 if (params.length() > 2000) {
                     params = params.substring(0, 2000) + "...";
@@ -124,7 +125,7 @@ public class OperLogAspect {
 
             // 记录返回结果
             if (operLogAnnotation.recordResult() && result != null) {
-                String resultStr = JSON.toJSONString(result);
+                String resultStr = objectMapper.writeValueAsString(result);
                 if (resultStr.length() > 2000) {
                     resultStr = resultStr.substring(0, 2000) + "...";
                 }

@@ -4,7 +4,7 @@ import com.bookkeeping.common.Result;
 import com.bookkeeping.utils.JwtUtil;
 import com.bookkeeping.utils.RedisUtil;
 import com.bookkeeping.utils.UserContext;
-import com.alibaba.fastjson2.JSON;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +27,8 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     private static final String HEADER_AUTHORIZATION = "Authorization";
     private static final String TOKEN_PREFIX = "Bearer ";
+
+    private final ObjectMapper objectMapper;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
@@ -82,7 +84,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         response.setContentType("application/json;charset=UTF-8");
         response.setStatus(HttpServletResponse.SC_OK);
         PrintWriter writer = response.getWriter();
-        writer.write(JSON.toJSONString(result));
+        writer.write(objectMapper.writeValueAsString(result));
         writer.flush();
         writer.close();
     }

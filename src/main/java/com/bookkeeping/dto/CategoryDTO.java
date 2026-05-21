@@ -5,19 +5,16 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
-/**
- * 类别DTO
- */
 @Data
-@Schema(description = "类别请求参数")
+@Schema(description = "类别DTO")
 public class CategoryDTO {
 
+    @Schema(description = "类别名称", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "类别名称不能为空")
-    @Schema(description = "类别名称", required = true)
     private String name;
 
+    @Schema(description = "类型：1-支出，2-收入", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "类型不能为空")
-    @Schema(description = "类型：1-收入，2-支出", required = true)
     private Integer type;
 
     @Schema(description = "图标")

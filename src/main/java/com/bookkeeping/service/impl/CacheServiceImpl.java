@@ -1,9 +1,9 @@
 package com.bookkeeping.service.impl;
 
-import com.alibaba.fastjson2.JSON;
 import com.bookkeeping.service.CacheService;
 import com.bookkeeping.utils.RedisUtil;
 import com.bookkeeping.vo.UserVO;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -24,6 +24,7 @@ public class CacheServiceImpl implements CacheService {
 
     private final RedisUtil redisUtil;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final ObjectMapper objectMapper;
 
     // 缓存前缀
     private static final String USER_CACHE_PREFIX = "user:";
@@ -49,7 +50,8 @@ public class CacheServiceImpl implements CacheService {
             String key = USER_CACHE_PREFIX + userId;
             Object value = redisUtil.get(key);
             if (value != null) {
-                return JSON.parseObject(JSON.toJSONString(value), UserVO.class);
+                String jsonStr = objectMapper.writeValueAsString(value);
+                return objectMapper.readValue(jsonStr, UserVO.class);
             }
         } catch (Exception e) {
             log.warn("获取用户缓存失败: userId={}", userId, e);

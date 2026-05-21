@@ -7,11 +7,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-/**
- * 账单VO
- */
 @Data
-@Schema(description = "账单信息")
+@Schema(description = "账单信息VO")
 public class RecordVO {
 
     @Schema(description = "账单ID")
@@ -23,13 +20,13 @@ public class RecordVO {
     @Schema(description = "类别名称")
     private String categoryName;
 
-    @Schema(description = "类型：1-收入，2-支出")
+    @Schema(description = "类型：1-支出，2-收入")
     private Integer type;
 
     @Schema(description = "金额")
     private BigDecimal amount;
 
-    @Schema(description = "往来对象姓名")
+    @Schema(description = "联系人")
     private String contactName;
 
     @Schema(description = "账单日期")

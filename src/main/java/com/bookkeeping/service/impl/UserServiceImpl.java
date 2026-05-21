@@ -1,6 +1,5 @@
 package com.bookkeeping.service.impl;
 
-import com.alibaba.fastjson2.JSON;
 import com.bookkeeping.dto.UpdateUserDTO;
 import com.bookkeeping.dto.WxLoginDTO;
 import com.bookkeeping.entity.User;
@@ -13,6 +12,8 @@ import com.bookkeeping.vo.LoginVO;
 import com.bookkeeping.vo.UserVO;
 import com.bookkeeping.vo.WxSessionVO;
 import com.bookkeeping.config.WxMiniAppConfig;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -37,9 +38,11 @@ public class UserServiceImpl implements UserService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
+    private final ObjectMapper objectMapper;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public LoginVO wxLogin(WxLoginDTO loginDTO) {
+    public LoginVO wxLogin(WxLoginDTO loginDTO) throws JsonProcessingException {
         // 1. 调用微信接口获取openid和session_key
         String url = wxMiniAppConfig.getAuthUrl(loginDTO.getCode());
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
@@ -48,7 +51,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException("微信登录失败，请稍后重试");
         }
 
-        WxSessionVO sessionVO = JSON.parseObject(response.getBody(), WxSessionVO.class);
+        WxSessionVO sessionVO = objectMapper.readValue(response.getBody(), WxSessionVO.class);
 
         if (sessionVO.getErrcode() != null && sessionVO.getErrcode() != 0) {
             log.error("微信登录失败: {}", sessionVO.getErrmsg());
