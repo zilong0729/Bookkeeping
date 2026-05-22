@@ -7,8 +7,6 @@ import com.bookkeeping.service.UserService;
 import com.bookkeeping.service.UserTokenService;
 import com.bookkeeping.utils.JwtUtil;
 import com.bookkeeping.utils.RedisUtil;
-import com.bookkeeping.vo.LoginVO;
-import com.bookkeeping.vo.UserVO;
 import com.bookkeeping.vo.WxSessionVO;
 import com.bookkeeping.vo.req.LoginReqVO;
 import com.bookkeeping.vo.req.UserUpdateReqVO;
@@ -24,7 +22,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
-import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -37,15 +34,13 @@ public class UserServiceImpl implements UserService {
     private final RedisUtil redisUtil;
     private final WxMiniAppConfig wxMiniAppConfig;
     private final UserTokenService userTokenService;
-
-    private final RestTemplate restTemplate = new RestTemplate();
-
     private final ObjectMapper objectMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public LoginRespVO wxLogin(LoginReqVO loginVO) throws JsonProcessingException {
         String url = wxMiniAppConfig.getAuthUrl(loginVO.getCode());
+        RestTemplate restTemplate = new RestTemplate();
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
 
         if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
@@ -94,68 +89,8 @@ public class UserServiceImpl implements UserService {
         return LoginRespVO.builder()
                 .token(token)
                 .expiresIn(7 * 24 * 60 * 60L)
-                .userInfo(UserRespVO.builder().id(user.getId())
-                        .nickname(user.getNickname())
-                        .avatarUrl(user.getAvatarUrl())
-                        .phone(user.getPhone())
-                        .role(user.getRole())
-                        .build())
+                .userInfo(convertToRespVO(user))
                 .build();
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public LoginVO wxLoginWithDevice(LoginReqVO loginVO) throws JsonProcessingException {
-        String url = wxMiniAppConfig.getAuthUrl(loginVO.getCode());
-        ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-
-        if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-            throw new BusinessException("微信登录失败，请稍后重试");
-        }
-
-        WxSessionVO sessionVO = objectMapper.readValue(response.getBody(), WxSessionVO.class);
-
-        if (sessionVO.getErrcode() != null && sessionVO.getErrcode() != 0) {
-            log.error("微信登录失败: {}", sessionVO.getErrmsg());
-            throw new BusinessException("微信登录失败: " + sessionVO.getErrmsg());
-        }
-
-        String openid = sessionVO.getOpenid();
-        if (openid == null || openid.isEmpty()) {
-            throw new BusinessException("获取微信用户信息失败");
-        }
-
-        User user = userMapper.selectByOpenid(openid);
-        if (user == null) {
-            user = new User();
-            user.setOpenid(openid);
-            user.setUnionid(sessionVO.getUnionid());
-            user.setStatus(1);
-            userMapper.insert(user);
-            log.info("创建新用户: userId={}, openid={}", user.getId(), openid);
-        }
-
-        String token = jwtUtil.generateToken(user.getId(), openid, user.getRole());
-
-        userTokenService.createOrUpdateToken(
-                user.getId(),
-                token,
-                loginVO.getDeviceType() != null ? loginVO.getDeviceType() : 1,
-                null,
-                loginVO.getDeviceId(),
-                null,
-                null,
-                7
-        );
-
-        redisUtil.cacheUserToken(user.getId(), token, 7, TimeUnit.DAYS);
-
-        LoginVO result = new LoginVO();
-        result.setToken(token);
-        result.setExpiresIn(7 * 24 * 60 * 60L);
-        result.setUserInfo(convertToUserVO(user));
-
-        return result;
     }
 
     @Override
@@ -206,18 +141,6 @@ public class UserServiceImpl implements UserService {
         log.info("强制用户下线: userId={}", userId);
     }
 
-    private UserVO convertToUserVO(User user) {
-        UserVO vo = new UserVO();
-        vo.setId(user.getId());
-        vo.setNickname(user.getNickname());
-        vo.setAvatarUrl(user.getAvatarUrl());
-        vo.setPhone(user.getPhone());
-        vo.setStatus(user.getStatus());
-        vo.setRole(user.getRole());
-        vo.setCreateTime(user.getCreateTime());
-        return vo;
-    }
-
     private UserRespVO convertToRespVO(User user) {
         return UserRespVO.builder()
                 .id(user.getId())
@@ -225,7 +148,9 @@ public class UserServiceImpl implements UserService {
                 .avatarUrl(user.getAvatarUrl())
                 .phone(user.getPhone())
                 .openId(user.getOpenid())
-                .createTime(user.getCreateTime() != null ? LocalDateTime.parse(user.getCreateTime().toString()) : null)
+                .status(user.getStatus())
+                .role(user.getRole())
+                .createTime(user.getCreateTime())
                 .build();
     }
 }

@@ -1,6 +1,6 @@
 package com.bookkeeping.exception;
 
-import com.bookkeeping.common.Result;
+import com.bookkeeping.vo.resp.Result;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
@@ -34,7 +34,7 @@ public class GlobalExceptionHandler {
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining(", "));
         log.warn("参数校验失败: {}", message);
-        return Result.badRequest(message);
+        return Result.error(message);
     }
 
     /**
@@ -43,7 +43,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public Result<Void> handleIllegalArgumentException(IllegalArgumentException e) {
         log.warn("非法参数: {}", e.getMessage());
-        return Result.badRequest(e.getMessage());
+        return Result.error(e.getMessage());
     }
 
     /**

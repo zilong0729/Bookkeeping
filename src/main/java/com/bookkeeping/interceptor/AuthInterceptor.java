@@ -1,9 +1,9 @@
 package com.bookkeeping.interceptor;
 
-import com.bookkeeping.common.Result;
 import com.bookkeeping.utils.JwtUtil;
 import com.bookkeeping.utils.RedisUtil;
 import com.bookkeeping.utils.UserContext;
+import com.bookkeeping.vo.resp.Result;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -35,7 +35,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         // 获取token
         String authHeader = request.getHeader(HEADER_AUTHORIZATION);
         if (authHeader == null || !authHeader.startsWith(TOKEN_PREFIX)) {
-            writeErrorResponse(response, Result.unauthorized("请先登录"));
+            writeErrorResponse(response, Result.error("请先登录"));
             return false;
         }
 
@@ -43,7 +43,7 @@ public class AuthInterceptor implements HandlerInterceptor {
 
         // 验证token
         if (!jwtUtil.validateToken(token)) {
-            writeErrorResponse(response, Result.unauthorized("登录已过期，请重新登录"));
+            writeErrorResponse(response, Result.error("登录已过期，请重新登录"));
             return false;
         }
 
@@ -52,14 +52,14 @@ public class AuthInterceptor implements HandlerInterceptor {
         String openid = jwtUtil.getOpenidFromToken(token);
 
         if (userId == null || openid == null) {
-            writeErrorResponse(response, Result.unauthorized("登录信息无效，请重新登录"));
+            writeErrorResponse(response, Result.error("登录信息无效，请重新登录"));
             return false;
         }
 
         // 验证token是否在Redis中存在（支持后端强制下线）
         String cachedToken = redisUtil.getUserToken(userId);
         if (cachedToken == null || !cachedToken.equals(token)) {
-            writeErrorResponse(response, Result.unauthorized("登录已失效，请重新登录"));
+            writeErrorResponse(response, Result.error("登录已失效，请重新登录"));
             return false;
         }
 

@@ -1,7 +1,5 @@
 package com.bookkeeping.service;
 
-import com.bookkeeping.vo.LoginVO;
-import com.bookkeeping.vo.UserVO;
 import com.bookkeeping.vo.req.LoginReqVO;
 import com.bookkeeping.vo.req.UserUpdateReqVO;
 import com.bookkeeping.vo.resp.LoginRespVO;
@@ -11,8 +9,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 public interface UserService {
 
     LoginRespVO wxLogin(LoginReqVO loginVO) throws JsonProcessingException;
-
-    LoginVO wxLoginWithDevice(LoginReqVO loginVO) throws JsonProcessingException;
 
     UserRespVO getCurrentUser(Long userId);
 
