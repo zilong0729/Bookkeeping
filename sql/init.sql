@@ -72,25 +72,62 @@ CREATE TABLE IF NOT EXISTS `record` (
 
 -- 我的事件表
 CREATE TABLE IF NOT EXISTS `my_event` (
-    `id` BIGINT NOT NULL COMMENT '事件ID',
-    `user_id` BIGINT NOT NULL COMMENT '用户ID',
-    `title` VARCHAR(200) NOT NULL COMMENT '事件标题',
-    `event_type` TINYINT NOT NULL COMMENT '事件类型：1-婚宴，2-生日，3-乔迁，4-其他',
-    `event_date` DATE NOT NULL COMMENT '事件日期',
-    `location` VARCHAR(200) DEFAULT NULL COMMENT '地点',
-    `remark` TEXT DEFAULT NULL COMMENT '备注',
-    `advance_days` INT NOT NULL DEFAULT 3 COMMENT '提前提醒天数：默认3天',
-    `push_status` TINYINT NOT NULL DEFAULT 0 COMMENT '推送状态：0-未推送，1-已推送',
-    `push_time` DATETIME DEFAULT NULL COMMENT '推送时间',
-    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    `deleted` TINYINT NOT NULL DEFAULT '0' COMMENT '逻辑删除：0-未删除，1-已删除',
-    PRIMARY KEY (`id`),
-    KEY `idx_user_id` (`user_id`),
-    KEY `idx_event_date` (`event_date`),
-    KEY `idx_push_status` (`push_status`),
-    KEY `idx_deleted` (`deleted`)
+  `id` BIGINT NOT NULL COMMENT '事件ID',
+  `user_id` BIGINT NOT NULL COMMENT '用户ID',
+  `title` VARCHAR(200) NOT NULL COMMENT '事件标题',
+  `event_type` TINYINT NOT NULL COMMENT '事件类型：1-婚宴，2-生日，3-乔迁，4-其他',
+  `event_date` DATE NOT NULL COMMENT '事件日期',
+  `location` VARCHAR(200) DEFAULT NULL COMMENT '地点',
+  `remark` TEXT DEFAULT NULL COMMENT '备注',
+  `advance_days` INT NOT NULL DEFAULT 3 COMMENT '提前提醒天数：默认3天',
+  `push_status` TINYINT NOT NULL DEFAULT 0 COMMENT '推送状态：0-未推送，1-已推送',
+  `push_time` DATETIME DEFAULT NULL COMMENT '推送时间',
+  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` TINYINT NOT NULL DEFAULT '0' COMMENT '逻辑删除：0-未删除，1-已删除',
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_event_date` (`event_date`),
+  KEY `idx_push_status` (`push_status`),
+  KEY `idx_deleted` (`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='我的事件表';
+
+-- 分享邀请记录表
+CREATE TABLE IF NOT EXISTS `share_invite` (
+  `id` BIGINT NOT NULL COMMENT '分享ID',
+  `share_user_id` BIGINT NOT NULL COMMENT '分享者用户ID',
+  `share_type` TINYINT NOT NULL COMMENT '分享类型：1-事件邀请，2-好友邀请',
+  `related_id` BIGINT DEFAULT NULL COMMENT '关联ID（事件ID等）',
+  `share_code` VARCHAR(100) NOT NULL COMMENT '分享码（唯一）',
+  `accept_user_id` BIGINT DEFAULT NULL COMMENT '接受邀请的用户ID',
+  `accept_time` DATETIME DEFAULT NULL COMMENT '接受时间',
+  `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0-待接受，1-已接受，2-已过期',
+  `expire_time` DATETIME NOT NULL COMMENT '过期时间',
+  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` TINYINT NOT NULL DEFAULT '0' COMMENT '逻辑删除：0-未删除，1-已删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_share_code` (`share_code`),
+  KEY `idx_share_user_id` (`share_user_id`),
+  KEY `idx_accept_user_id` (`accept_user_id`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='分享邀请记录表';
+
+-- 好友关系表
+CREATE TABLE IF NOT EXISTS `friend_relation` (
+  `id` BIGINT NOT NULL COMMENT '关系ID',
+  `user_id` BIGINT NOT NULL COMMENT '用户ID',
+  `friend_user_id` BIGINT NOT NULL COMMENT '好友用户ID',
+  `contact_id` BIGINT DEFAULT NULL COMMENT '联系人ID',
+  `relation` VARCHAR(50) DEFAULT NULL COMMENT '关系描述',
+  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` TINYINT NOT NULL DEFAULT '0' COMMENT '逻辑删除：0-未删除，1-已删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_friend` (`user_id`, `friend_user_id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_friend_user_id` (`friend_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='好友关系表';
 
 -- 插入默认类别数据（收入）
 INSERT INTO `category` (`id`, `user_id`, `name`, `type`, `icon`, `sort_order`, `is_default`) VALUES

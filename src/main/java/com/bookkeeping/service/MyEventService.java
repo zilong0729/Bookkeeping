@@ -1,17 +1,27 @@
 package com.bookkeeping.service;
 
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.bookkeeping.dto.MyEventDTO;
-import com.bookkeeping.vo.MyEventVO;
+import com.bookkeeping.entity.MyEvent;
+import com.bookkeeping.vo.req.CreateEventReqVO;
+import com.bookkeeping.vo.req.EventListReqVO;
+import com.bookkeeping.vo.req.UpdateEventReqVO;
+import com.bookkeeping.vo.resp.EventRespVO;
+import com.bookkeeping.vo.resp.PageResult;
 
 import java.util.List;
 
 public interface MyEventService {
-    MyEventVO createEvent(Long userId, MyEventDTO dto);
-    MyEventVO updateEvent(Long userId, Long id, MyEventDTO dto);
+
+    EventRespVO createEvent(Long userId, CreateEventReqVO reqVO);
+
+    EventRespVO updateEvent(Long userId, UpdateEventReqVO reqVO);
+
     void deleteEvent(Long userId, Long id);
-    MyEventVO getEventDetail(Long userId, Long id);
-    Page<MyEventVO> getEventList(Long userId, Integer status, Long current, Long size);
-    List<MyEventVO> getEventsToPush();
+
+    EventRespVO getEventDetail(Long userId, Long id);
+
+    PageResult<EventRespVO> getEventList(Long userId, EventListReqVO reqVO);
+
+    List<MyEvent> getEventsToPush();
+
     void markAsPushed(Long id);
 }

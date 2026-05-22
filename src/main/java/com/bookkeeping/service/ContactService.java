@@ -1,23 +1,26 @@
 package com.bookkeeping.service;
 
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.bookkeeping.entity.Contact;
-import com.bookkeeping.vo.ContactVO;
+import com.bookkeeping.vo.req.ContactListReqVO;
+import com.bookkeeping.vo.req.CreateContactReqVO;
+import com.bookkeeping.vo.req.UpdateContactReqVO;
+import com.bookkeeping.vo.resp.ContactRespVO;
+import com.bookkeeping.vo.resp.PageResult;
 
 import java.util.List;
 
 public interface ContactService {
-    ContactVO createContact(Long userId, com.bookkeeping.dto.ContactDTO dto);
 
-    ContactVO updateContact(Long userId, Long id, com.bookkeeping.dto.ContactDTO dto);
+    ContactRespVO createContact(Long userId, CreateContactReqVO reqVO);
+
+    ContactRespVO updateContact(Long userId, UpdateContactReqVO reqVO);
 
     void deleteContact(Long userId, Long id);
 
-    ContactVO getContactDetail(Long userId, Long id);
+    ContactRespVO getContactDetail(Long userId, Long id);
 
-    Page<ContactVO> getContactList(Long userId, String keyword, Long current, Long size);
+    PageResult<ContactRespVO> getContactList(Long userId, ContactListReqVO reqVO);
 
-    List<ContactVO> getContactsByIds(List<Long> ids);
+    List<ContactRespVO> getContactsByIds(List<Long> ids);
 
-    List<ContactVO> getContactsFromRecords(Long userId, List<Long> categoryIds);
+    List<ContactRespVO> getContactsFromRecords(Long userId, List<Long> categoryIds);
 }

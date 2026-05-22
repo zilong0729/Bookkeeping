@@ -1,15 +1,11 @@
 package com.bookkeeping.controller;
 
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.bookkeeping.annotation.OperLog;
-import com.bookkeeping.common.PageResult;
-import com.bookkeeping.common.Result;
-import com.bookkeeping.dto.ReminderTaskDTO;
 import com.bookkeeping.service.ReminderTaskService;
 import com.bookkeeping.utils.UserContext;
-import com.bookkeeping.vo.ReminderTaskVO;
+import com.bookkeeping.vo.req.*;
+import com.bookkeeping.vo.resp.*;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,73 +22,63 @@ public class ReminderTaskController {
 
     private final ReminderTaskService reminderTaskService;
 
-    @PostMapping
+    @PostMapping("/create")
     @OperLog("创建提醒任务")
     @Operation(summary = "创建提醒任务", description = "创建一个新的提醒任务")
-    public Result<ReminderTaskVO> createTask(@Valid @RequestBody ReminderTaskDTO dto) {
+    public Result<ReminderTaskRespVO> createTask(@Valid @RequestBody UnifiedRequest<CreateReminderTaskReqVO> req) {
         Long userId = UserContext.getUserId();
-        ReminderTaskVO vo = reminderTaskService.createTask(userId, dto);
+        ReminderTaskRespVO vo = reminderTaskService.createTask(userId, req.getData());
         return Result.success("创建成功", vo);
     }
 
-    @PutMapping("/{id}")
+    @PostMapping("/update")
     @OperLog("更新提醒任务")
     @Operation(summary = "更新提醒任务", description = "更新指定的提醒任务")
-    public Result<ReminderTaskVO> updateTask(
-            @Parameter(description = "任务ID") @PathVariable("id") Long id,
-            @Valid @RequestBody ReminderTaskDTO dto) {
+    public Result<ReminderTaskRespVO> updateTask(@Valid @RequestBody UnifiedRequest<UpdateReminderTaskReqVO> req) {
         Long userId = UserContext.getUserId();
-        ReminderTaskVO vo = reminderTaskService.updateTask(userId, id, dto);
+        ReminderTaskRespVO vo = reminderTaskService.updateTask(userId, req.getData());
         return Result.success("更新成功", vo);
     }
 
-    @DeleteMapping("/{id}")
+    @PostMapping("/delete")
     @OperLog("删除提醒任务")
     @Operation(summary = "删除提醒任务", description = "删除指定的提醒任务")
-    public Result<Void> deleteTask(
-            @Parameter(description = "任务ID") @PathVariable("id") Long id) {
+    public Result<Void> deleteTask(@Valid @RequestBody UnifiedRequest<IdReqVO> req) {
         Long userId = UserContext.getUserId();
-        reminderTaskService.deleteTask(userId, id);
-        return Result.success("删除成功", null);
+        reminderTaskService.deleteTask(userId, req.getData().getId());
+        return Result.success("删除成功");
     }
 
-    @GetMapping("/{id}")
+    @PostMapping("/detail")
     @Operation(summary = "获取提醒任务详情", description = "获取指定提醒任务的详细信息")
-    public Result<ReminderTaskVO> getTaskDetail(
-            @Parameter(description = "任务ID") @PathVariable("id") Long id) {
+    public Result<ReminderTaskRespVO> getTaskDetail(@Valid @RequestBody UnifiedRequest<IdReqVO> req) {
         Long userId = UserContext.getUserId();
-        ReminderTaskVO vo = reminderTaskService.getTaskDetail(userId, id);
+        ReminderTaskRespVO vo = reminderTaskService.getTaskDetail(userId, req.getData().getId());
         return Result.success(vo);
     }
 
-    @GetMapping("/list")
+    @PostMapping("/list")
     @Operation(summary = "获取提醒任务列表", description = "分页查询提醒任务列表")
-    public Result<PageResult<ReminderTaskVO>> getTaskList(
-            @Parameter(description = "状态：0-待发送，1-已发送，2-已取消") @RequestParam(required = false) Integer status,
-            @Parameter(description = "当前页") @RequestParam(defaultValue = "1") Long current,
-            @Parameter(description = "每页条数") @RequestParam(defaultValue = "10") Long size) {
+    public Result<PageResult<ReminderTaskRespVO>> getTaskList(@Valid @RequestBody UnifiedRequest<ReminderTaskListReqVO> req) {
         Long userId = UserContext.getUserId();
-        Page<ReminderTaskVO> page = reminderTaskService.getTaskList(userId, status, current, size);
-        return Result.success(PageResult.from(page));
+        PageResult<ReminderTaskRespVO> page = reminderTaskService.getTaskList(userId, req.getData());
+        return Result.success(page);
     }
 
-    @PostMapping("/{id}/cancel")
+    @PostMapping("/cancel")
     @OperLog("取消提醒任务")
     @Operation(summary = "取消提醒任务", description = "取消指定的提醒任务")
-    public Result<Void> cancelTask(
-            @Parameter(description = "任务ID") @PathVariable("id") Long id) {
+    public Result<Void> cancelTask(@Valid @RequestBody UnifiedRequest<IdReqVO> req) {
         Long userId = UserContext.getUserId();
-        reminderTaskService.cancelTask(userId, id);
-        return Result.success("取消成功", null);
+        reminderTaskService.cancelTask(userId, req.getData().getId());
+        return Result.success("取消成功");
     }
 
-    @GetMapping("/{id}/share-params")
+    @PostMapping("/share-params")
     @Operation(summary = "生成分享参数", description = "生成提醒任务的分享参数")
-    public Result<Map<String, String>> generateShareParams(
-            @Parameter(description = "任务ID") @PathVariable("id") Long id,
-            @Parameter(description = "联系人ID") @RequestParam(required = false) Long contactId) {
+    public Result<Map<String, String>> generateShareParams(@Valid @RequestBody UnifiedRequest<GenerateShareParamsReqVO> req) {
         Long userId = UserContext.getUserId();
-        String params = reminderTaskService.generateShareParams(userId, id, contactId);
+        String params = reminderTaskService.generateShareParams(userId, req.getData().getTaskId(), req.getData().getContactId());
         Map<String, String> result = new HashMap<>();
         result.put("shareParams", params);
         return Result.success(result);

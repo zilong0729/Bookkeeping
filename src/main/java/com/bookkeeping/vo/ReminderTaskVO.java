@@ -1,5 +1,6 @@
 package com.bookkeeping.vo;
 
+import com.bookkeeping.vo.resp.ContactRespVO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -48,5 +49,5 @@ public class ReminderTaskVO {
     private LocalDateTime createTime;
 
     @Schema(description = "关联的联系人列表")
-    private List<ContactVO> contacts;
+    private List<ContactRespVO> contacts;
 }

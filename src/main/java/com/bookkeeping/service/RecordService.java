@@ -1,43 +1,25 @@
 package com.bookkeeping.service;
 
-import com.bookkeeping.common.PageResult;
-import com.bookkeeping.dto.RecordDTO;
-import com.bookkeeping.dto.RecordQueryDTO;
-import com.bookkeeping.vo.RecordVO;
-import com.bookkeeping.vo.StatisticsVO;
+import com.bookkeeping.vo.req.CreateRecordReqVO;
+import com.bookkeeping.vo.req.RecordListReqVO;
+import com.bookkeeping.vo.req.StatisticsReqVO;
+import com.bookkeeping.vo.req.UpdateRecordReqVO;
+import com.bookkeeping.vo.resp.RecordRespVO;
+import com.bookkeeping.vo.resp.StatisticsRespVO;
 
-/**
- * 账单服务接口
- */
+import java.util.List;
+
 public interface RecordService {
 
-    /**
-     * 创建账单
-     */
-    RecordVO createRecord(Long userId, RecordDTO recordDTO);
+    RecordRespVO createRecord(Long userId, CreateRecordReqVO reqVO);
 
-    /**
-     * 更新账单
-     */
-    RecordVO updateRecord(Long userId, Long recordId, RecordDTO recordDTO);
+    RecordRespVO updateRecord(Long userId, UpdateRecordReqVO reqVO);
 
-    /**
-     * 删除账单
-     */
     void deleteRecord(Long userId, Long recordId);
 
-    /**
-     * 获取账单详情
-     */
-    RecordVO getRecordDetail(Long userId, Long recordId);
+    RecordRespVO getRecordDetail(Long userId, Long recordId);
 
-    /**
-     * 查询账单列表
-     */
-    PageResult<RecordVO> getRecordList(Long userId, RecordQueryDTO queryDTO);
+    List<RecordRespVO> getRecordList(Long userId, RecordListReqVO reqVO);
 
-    /**
-     * 统计账单金额
-     */
-    StatisticsVO getStatistics(Long userId, RecordQueryDTO queryDTO);
+    StatisticsRespVO getStatistics(Long userId, StatisticsReqVO reqVO);
 }

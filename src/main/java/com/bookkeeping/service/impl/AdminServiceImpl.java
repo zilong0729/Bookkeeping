@@ -2,8 +2,6 @@ package com.bookkeeping.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.bookkeeping.common.PageResult;
-import com.bookkeeping.dto.*;
 import com.bookkeeping.entity.Category;
 import com.bookkeeping.entity.OperationLog;
 import com.bookkeeping.entity.Record;
@@ -16,10 +14,10 @@ import com.bookkeeping.mapper.UserMapper;
 import com.bookkeeping.service.AdminService;
 import com.bookkeeping.utils.JwtUtil;
 import com.bookkeeping.utils.RedisUtil;
-import com.bookkeeping.vo.*;
+import com.bookkeeping.vo.req.*;
+import com.bookkeeping.vo.resp.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,9 +54,9 @@ public class AdminServiceImpl implements AdminService {
 
 
     @Override
-    public LoginVO adminLogin(AdminLoginDTO loginDTO) {
+    public LoginRespVO adminLogin(AdminLoginReqVO reqVO) {
         // 检查登录失败次数
-        String loginFailKey = "login_fail:admin:" + loginDTO.getUsername();
+        String loginFailKey = "login_fail:admin:" + reqVO.getUsername();
         Object failCountObj = redisUtil.get(loginFailKey);
         int failCount = failCountObj != null ? Integer.parseInt(failCountObj.toString()) : 0;
         
@@ -68,10 +66,10 @@ public class AdminServiceImpl implements AdminService {
 
         // 校验管理员账号密码
         boolean loginSuccess = true;
-        if (!adminUsername.equals(loginDTO.getUsername())) {
+        if (!adminUsername.equals(reqVO.getUsername())) {
             loginSuccess = false;
         }
-        if (!adminPassword.equals(loginDTO.getPassword())) {
+        if (!adminPassword.equals(reqVO.getPassword())) {
             loginSuccess = false;
         }
 
@@ -95,199 +93,169 @@ public class AdminServiceImpl implements AdminService {
         redisUtil.cacheUserToken(adminUser.getId(), token, 7, TimeUnit.DAYS);
 
         // 组装返回
-        LoginVO loginVO = new LoginVO();
-        loginVO.setToken(token);
-        loginVO.setExpiresIn(7 * 24 * 60 * 60L);
-        loginVO.setUserInfo(convertToUserVO(adminUser));
+        LoginRespVO respVO = new LoginRespVO();
+        respVO.setToken(token);
+        respVO.setExpiresIn(7 * 24 * 60 * 60L);
+        respVO.setUserInfo(convertToUserRespVO(adminUser));
 
-        return loginVO;
+        return respVO;
     }
 
     @Override
-    public PageResult<UserVO> listUsers(AdminUserQueryDTO queryDTO) {
+    public PageResult<UserRespVO> listUsers(AdminUserQueryReqVO reqVO) {
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(User::getDeleted, 0);
 
-        if (StringUtils.hasText(queryDTO.getNickname())) {
-            wrapper.like(User::getNickname, queryDTO.getNickname());
+        if (StringUtils.hasText(reqVO.getKeyword())) {
+            wrapper.and(w -> w.like(User::getNickname, reqVO.getKeyword())
+                    .or().like(User::getPhone, reqVO.getKeyword()));
         }
-        if (StringUtils.hasText(queryDTO.getPhone())) {
-            wrapper.like(User::getPhone, queryDTO.getPhone());
-        }
-        if (queryDTO.getStatus() != null) {
-            wrapper.eq(User::getStatus, queryDTO.getStatus());
-        }
-        if (queryDTO.getRole() != null) {
-            wrapper.eq(User::getRole, queryDTO.getRole());
+        if (reqVO.getStatus() != null) {
+            wrapper.eq(User::getStatus, reqVO.getStatus());
         }
 
         wrapper.orderByDesc(User::getCreateTime);
 
-        Page<User> page = new Page<>(queryDTO.getCurrent(), queryDTO.getSize());
+        Long current = reqVO.getCurrent() != null ? reqVO.getCurrent() : 1L;
+        Long size = reqVO.getSize() != null ? reqVO.getSize() : 10L;
+        
+        Page<User> page = new Page<>(current, size);
         Page<User> userPage = userMapper.selectPage(page, wrapper);
 
-        List<UserVO> records = userPage.getRecords().stream()
-                .map(this::convertToUserVO)
+        List<UserRespVO> records = userPage.getRecords().stream()
+                .map(this::convertToUserRespVO)
                 .collect(Collectors.toList());
 
-        Page<UserVO> resultPage = new Page<>();
-        resultPage.setCurrent(userPage.getCurrent());
-        resultPage.setSize(userPage.getSize());
-        resultPage.setTotal(userPage.getTotal());
-        resultPage.setPages(userPage.getPages());
-        resultPage.setRecords(records);
-
-        return PageResult.from(resultPage);
+        return PageResult.of(records, userPage.getTotal(), userPage.getCurrent(), userPage.getSize());
     }
 
     @Override
-    public UserVO getUserDetail(Long userId) {
+    public UserRespVO getUserDetail(Long userId) {
         User user = userMapper.selectById(userId);
         if (user == null || user.getDeleted() == 1) {
             throw new BusinessException("用户不存在");
         }
-        return convertToUserVO(user);
+        return convertToUserRespVO(user);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public UserVO operateUser(Long targetUserId, AdminOperateUserDTO operateDTO) {
-        User user = userMapper.selectById(targetUserId);
+    public UserRespVO operateUser(AdminOperateUserReqVO reqVO) {
+        User user = userMapper.selectById(reqVO.getUserId());
         if (user == null || user.getDeleted() == 1) {
             throw new BusinessException("用户不存在");
         }
 
-        if (operateDTO.getStatus() != null) {
-            user.setStatus(operateDTO.getStatus());
+        if (reqVO.getUserId() == null) {
+            throw new BusinessException("用户ID不能为空");
         }
-        if (operateDTO.getRole() != null) {
-            user.setRole(operateDTO.getRole());
+        if (reqVO.getOperation() != null) {
+            user.setStatus(reqVO.getOperation());
         }
 
         userMapper.updateById(user);
 
         // 如果禁用了用户，清除其token强制下线
-        if (operateDTO.getStatus() != null && operateDTO.getStatus() == 0) {
-            redisUtil.deleteUserToken(targetUserId);
+        if (reqVO.getOperation() != null && reqVO.getOperation() == 0) {
+            redisUtil.deleteUserToken(reqVO.getUserId());
         }
 
-        return convertToUserVO(user);
+        return convertToUserRespVO(user);
     }
 
     @Override
-    public PageResult<?> listUserRecords(Long targetUserId, Integer type,
-                                         String startDate, String endDate,
-                                         Long current, Long size) {
-        User user = userMapper.selectById(targetUserId);
+    public PageResult<RecordRespVO> listUserRecords(AdminUserRecordsReqVO reqVO) {
+        User user = userMapper.selectById(reqVO.getUserId());
         if (user == null || user.getDeleted() == 1) {
             throw new BusinessException("用户不存在");
         }
 
         LambdaQueryWrapper<Record> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Record::getUserId, targetUserId);
+        wrapper.eq(Record::getUserId, reqVO.getUserId());
         wrapper.eq(Record::getDeleted, 0);
 
-        if (type != null) {
-            wrapper.eq(Record::getType, type);
+        if (reqVO.getType() != null) {
+            wrapper.eq(Record::getType, reqVO.getType());
         }
-        if (StringUtils.hasText(startDate)) {
-            wrapper.ge(Record::getRecordDate, LocalDate.parse(startDate));
+        if (StringUtils.hasText(reqVO.getStartDate())) {
+            wrapper.ge(Record::getRecordDate, LocalDate.parse(reqVO.getStartDate()));
         }
-        if (StringUtils.hasText(endDate)) {
-            wrapper.le(Record::getRecordDate, LocalDate.parse(endDate));
+        if (StringUtils.hasText(reqVO.getEndDate())) {
+            wrapper.le(Record::getRecordDate, LocalDate.parse(reqVO.getEndDate()));
         }
 
         wrapper.orderByDesc(Record::getRecordDate);
         wrapper.orderByDesc(Record::getCreateTime);
 
+        Long current = reqVO.getCurrent() != null ? reqVO.getCurrent() : 1L;
+        Long size = reqVO.getSize() != null ? reqVO.getSize() : 10L;
+        
         Page<Record> page = new Page<>(current, size);
         Page<Record> recordPage = recordMapper.selectPage(page, wrapper);
 
-        List<RecordVO> records = recordPage.getRecords().stream()
+        List<RecordRespVO> records = recordPage.getRecords().stream()
                 .map(r -> {
                     Category category = categoryMapper.selectById(r.getCategoryId());
-                    String categoryName = category != null ? category.getName() : "";
-                    RecordVO vo = new RecordVO();
-                    BeanUtils.copyProperties(r, vo);
-                    vo.setCategoryName(categoryName);
-                    return vo;
+                    return convertToRecordRespVO(r, category);
                 })
                 .collect(Collectors.toList());
 
-        Page<RecordVO> resultPage = new Page<>();
-        resultPage.setCurrent(recordPage.getCurrent());
-        resultPage.setSize(recordPage.getSize());
-        resultPage.setTotal(recordPage.getTotal());
-        resultPage.setPages(recordPage.getPages());
-        resultPage.setRecords(records);
-
-        return PageResult.from(resultPage);
+        return PageResult.of(records, recordPage.getTotal(), recordPage.getCurrent(), recordPage.getSize());
     }
 
     @Override
-    public Object getUserStatistics(Long targetUserId, String startDate, String endDate) {
-        User user = userMapper.selectById(targetUserId);
+    public StatisticsRespVO getUserStatistics(AdminUserStatisticsReqVO reqVO) {
+        User user = userMapper.selectById(reqVO.getUserId());
         if (user == null || user.getDeleted() == 1) {
             throw new BusinessException("用户不存在");
         }
 
-        LocalDate start = StringUtils.hasText(startDate) ? LocalDate.parse(startDate) : LocalDate.now().withDayOfMonth(1);
-        LocalDate end = StringUtils.hasText(endDate) ? LocalDate.parse(endDate) : LocalDate.now();
+        LocalDate start = StringUtils.hasText(reqVO.getStartDate()) ? LocalDate.parse(reqVO.getStartDate()) : LocalDate.now().withDayOfMonth(1);
+        LocalDate end = StringUtils.hasText(reqVO.getEndDate()) ? LocalDate.parse(reqVO.getEndDate()) : LocalDate.now();
 
-        BigDecimal totalIncome = recordMapper.sumAmountByDateRange(targetUserId, 1, start, end);
-        BigDecimal totalExpense = recordMapper.sumAmountByDateRange(targetUserId, 2, start, end);
+        BigDecimal totalIncome = recordMapper.sumAmountByDateRange(reqVO.getUserId(), 1, start, end);
+        BigDecimal totalExpense = recordMapper.sumAmountByDateRange(reqVO.getUserId(), 2, start, end);
 
         if (totalIncome == null) totalIncome = BigDecimal.ZERO;
         if (totalExpense == null) totalExpense = BigDecimal.ZERO;
 
-        StatisticsVO vo = new StatisticsVO();
-        vo.setTotalIncome(totalIncome);
-        vo.setTotalExpense(totalExpense);
-        vo.setBalance(totalIncome.subtract(totalExpense));
-        return vo;
+        return StatisticsRespVO.builder()
+                .totalIncome(totalIncome)
+                .totalExpense(totalExpense)
+                .balance(totalIncome.subtract(totalExpense))
+                .build();
     }
 
     @Override
-    public PageResult<OperationLogVO> listLogs(LogQueryDTO queryDTO) {
+    public PageResult<OperationLogRespVO> listLogs(LogQueryReqVO reqVO) {
         LambdaQueryWrapper<OperationLog> wrapper = new LambdaQueryWrapper<>();
 
-        if (queryDTO.getUserId() != null) {
-            wrapper.eq(OperationLog::getUserId, queryDTO.getUserId());
+        if (reqVO.getOperatorId() != null) {
+            wrapper.eq(OperationLog::getUserId, reqVO.getOperatorId());
         }
-        if (StringUtils.hasText(queryDTO.getOperation())) {
-            wrapper.like(OperationLog::getOperation, queryDTO.getOperation());
+        if (StringUtils.hasText(reqVO.getKeyword())) {
+            wrapper.like(OperationLog::getOperation, reqVO.getKeyword());
         }
-        if (queryDTO.getStatus() != null) {
-            wrapper.eq(OperationLog::getStatus, queryDTO.getStatus());
+        if (StringUtils.hasText(reqVO.getStartDate())) {
+            wrapper.ge(OperationLog::getCreateTime, LocalDateTime.parse(reqVO.getStartDate(), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
         }
-        if (StringUtils.hasText(queryDTO.getStartTime())) {
-            wrapper.ge(OperationLog::getCreateTime, LocalDateTime.parse(queryDTO.getStartTime(), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
-        }
-        if (StringUtils.hasText(queryDTO.getEndTime())) {
-            wrapper.le(OperationLog::getCreateTime, LocalDateTime.parse(queryDTO.getEndTime(), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        if (StringUtils.hasText(reqVO.getEndDate())) {
+            wrapper.le(OperationLog::getCreateTime, LocalDateTime.parse(reqVO.getEndDate(), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
         }
 
         wrapper.orderByDesc(OperationLog::getCreateTime);
 
-        Page<OperationLog> page = new Page<>(queryDTO.getCurrent(), queryDTO.getSize());
+        Long current = reqVO.getCurrent() != null ? reqVO.getCurrent() : 1L;
+        Long size = reqVO.getSize() != null ? reqVO.getSize() : 10L;
+        
+        Page<OperationLog> page = new Page<>(current, size);
         Page<OperationLog> logPage = operationLogMapper.selectPage(page, wrapper);
 
-        List<OperationLogVO> records = logPage.getRecords().stream()
-                .map(log -> {
-                    OperationLogVO vo = new OperationLogVO();
-                    BeanUtils.copyProperties(log, vo);
-                    return vo;
-                })
+        List<OperationLogRespVO> records = logPage.getRecords().stream()
+                .map(this::convertToOperationLogRespVO)
                 .collect(Collectors.toList());
 
-        Page<OperationLogVO> resultPage = new Page<>();
-        resultPage.setCurrent(logPage.getCurrent());
-        resultPage.setSize(logPage.getSize());
-        resultPage.setTotal(logPage.getTotal());
-        resultPage.setPages(logPage.getPages());
-        resultPage.setRecords(records);
-
-        return PageResult.from(resultPage);
+        return PageResult.of(records, logPage.getTotal(), logPage.getCurrent(), logPage.getSize());
     }
 
     /**
@@ -310,15 +278,51 @@ public class AdminServiceImpl implements AdminService {
         return user;
     }
 
-    private UserVO convertToUserVO(User user) {
-        UserVO vo = new UserVO();
-        vo.setId(user.getId());
-        vo.setNickname(user.getNickname());
-        vo.setAvatarUrl(user.getAvatarUrl());
-        vo.setPhone(user.getPhone());
-        vo.setStatus(user.getStatus());
-        vo.setRole(user.getRole());
-        vo.setCreateTime(user.getCreateTime());
-        return vo;
+    private UserRespVO convertToUserRespVO(User user) {
+        return UserRespVO.builder()
+                .id(user.getId())
+                .nickname(user.getNickname())
+                .avatarUrl(user.getAvatarUrl())
+                .phone(user.getPhone())
+                .status(user.getStatus())
+                .role(user.getRole())
+                .createTime(user.getCreateTime())
+                .build();
+    }
+
+    private RecordRespVO convertToRecordRespVO(Record record, Category category) {
+        return RecordRespVO.builder()
+                .id(record.getId())
+                .categoryId(record.getCategoryId())
+                .categoryName(category != null ? category.getName() : "")
+                .categoryIcon(category != null ? category.getIcon() : "")
+                .type(record.getType())
+                .amount(record.getAmount())
+                .contactId(record.getContactId())
+                .contactName(record.getContactName())
+                .recordDate(record.getRecordDate())
+                .remark(record.getRemark())
+                .createTime(record.getCreateTime())
+                .updateTime(record.getUpdateTime())
+                .build();
+    }
+
+    private OperationLogRespVO convertToOperationLogRespVO(OperationLog log) {
+        return OperationLogRespVO.builder()
+                .id(log.getId())
+                .operatorId(log.getUserId())
+                .operatorName(log.getUsername())
+                .operation(log.getOperation())
+                .method(log.getMethod())
+                .requestUrl(log.getRequestUrl())
+                .requestMethod(log.getRequestMethod())
+                .requestParams(log.getRequestParams())
+                .responseResult(log.getResponseResult())
+                .ip(log.getIp())
+                .status(log.getStatus())
+                .errorMsg(log.getErrorMsg())
+                .executionTime(log.getExecutionTime())
+                .createTime(log.getCreateTime() != null ? log.getCreateTime().toString() : null)
+                .build();
     }
 }

@@ -1,11 +1,11 @@
 package com.bookkeeping.service.impl;
 
 import com.bookkeeping.config.WechatConfig;
+import com.bookkeeping.entity.MyEvent;
 import com.bookkeeping.entity.User;
 import com.bookkeeping.service.WechatPushService;
 import com.bookkeeping.utils.WechatUtil;
 import com.bookkeeping.vo.ContactVO;
-import com.bookkeeping.vo.MyEventVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,7 +26,7 @@ public class WechatPushServiceImpl implements WechatPushService {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy年MM月dd日");
 
     @Override
-    public void pushEventNotification(MyEventVO event, User user, List<ContactVO> contacts) {
+    public void pushEventNotification(MyEvent event, User user, List<ContactVO> contacts) {
         log.info("开始推送事件通知: eventId={}, eventTitle={}, user={}", event.getId(), event.getTitle(), user.getNickname());
 
         String eventTypeText = getEventTypeText(event.getEventType());
@@ -67,7 +67,7 @@ public class WechatPushServiceImpl implements WechatPushService {
         log.info("事件通知推送完成: 成功={}, 失败={}, 总计={}", successCount, failCount, contacts.size());
     }
 
-    private Map<String, String> buildMessageData(MyEventVO event, String userName, String eventType) {
+    private Map<String, String> buildMessageData(MyEvent event, String userName, String eventType) {
         Map<String, String> data = new HashMap<>();
         data.put("thing1", userName);
         data.put("thing2", eventType);

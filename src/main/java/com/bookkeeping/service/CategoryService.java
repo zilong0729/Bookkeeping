@@ -1,32 +1,19 @@
 package com.bookkeeping.service;
 
-import com.bookkeeping.dto.CategoryDTO;
-import com.bookkeeping.vo.CategoryVO;
+import com.bookkeeping.vo.req.CategoryListReqVO;
+import com.bookkeeping.vo.req.CreateCategoryReqVO;
+import com.bookkeeping.vo.req.UpdateCategoryReqVO;
+import com.bookkeeping.vo.resp.CategoryRespVO;
 
 import java.util.List;
 
-/**
- * 类别服务接口
- */
 public interface CategoryService {
 
-    /**
-     * 获取用户的类别列表
-     */
-    List<CategoryVO> getCategoryList(Long userId, Integer type);
+    List<CategoryRespVO> getCategoryList(Long userId, CategoryListReqVO reqVO);
 
-    /**
-     * 创建类别
-     */
-    CategoryVO createCategory(Long userId, CategoryDTO categoryDTO);
+    CategoryRespVO createCategory(Long userId, CreateCategoryReqVO reqVO);
 
-    /**
-     * 更新类别
-     */
-    CategoryVO updateCategory(Long userId, Long categoryId, CategoryDTO categoryDTO);
+    CategoryRespVO updateCategory(Long userId, UpdateCategoryReqVO reqVO);
 
-    /**
-     * 删除类别
-     */
     void deleteCategory(Long userId, Long categoryId);
 }

@@ -1,15 +1,17 @@
 package com.bookkeeping.controller;
 
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.bookkeeping.annotation.OperLog;
-import com.bookkeeping.common.PageResult;
-import com.bookkeeping.common.Result;
-import com.bookkeeping.dto.ContactDTO;
 import com.bookkeeping.service.ContactService;
 import com.bookkeeping.utils.UserContext;
-import com.bookkeeping.vo.ContactVO;
+import com.bookkeeping.vo.req.ContactListReqVO;
+import com.bookkeeping.vo.req.CreateContactReqVO;
+import com.bookkeeping.vo.req.IdReqVO;
+import com.bookkeeping.vo.req.UnifiedRequest;
+import com.bookkeeping.vo.req.UpdateContactReqVO;
+import com.bookkeeping.vo.resp.ContactRespVO;
+import com.bookkeeping.vo.resp.PageResult;
+import com.bookkeeping.vo.resp.Result;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,62 +27,46 @@ public class ContactController {
 
     private final ContactService contactService;
 
-    @PostMapping
+    @PostMapping("/create")
     @OperLog("创建联系人")
     @Operation(summary = "创建联系人", description = "创建一个新的联系人")
-    public Result<ContactVO> createContact(@Valid @RequestBody ContactDTO dto) {
+    public Result<ContactRespVO> create(@Valid @RequestBody UnifiedRequest<CreateContactReqVO> req) {
         Long userId = UserContext.getUserId();
-        ContactVO vo = contactService.createContact(userId, dto);
-        return Result.success("创建成功", vo);
+        ContactRespVO respVO = contactService.createContact(userId, req.getData());
+        return Result.success("创建成功", respVO);
     }
 
-    @PutMapping("/{id}")
+    @PostMapping("/update")
     @OperLog("更新联系人")
     @Operation(summary = "更新联系人", description = "更新指定的联系人")
-    public Result<ContactVO> updateContact(
-            @Parameter(description = "联系人ID") @PathVariable("id") Long id,
-            @Valid @RequestBody ContactDTO dto) {
+    public Result<ContactRespVO> update(@Valid @RequestBody UnifiedRequest<UpdateContactReqVO> req) {
         Long userId = UserContext.getUserId();
-        ContactVO vo = contactService.updateContact(userId, id, dto);
-        return Result.success("更新成功", vo);
+        ContactRespVO respVO = contactService.updateContact(userId, req.getData());
+        return Result.success("更新成功", respVO);
     }
 
-    @DeleteMapping("/{id}")
+    @PostMapping("/delete")
     @OperLog("删除联系人")
     @Operation(summary = "删除联系人", description = "删除指定的联系人")
-    public Result<Void> deleteContact(
-            @Parameter(description = "联系人ID") @PathVariable("id") Long id) {
+    public Result<Void> delete(@Valid @RequestBody UnifiedRequest<IdReqVO> req) {
         Long userId = UserContext.getUserId();
-        contactService.deleteContact(userId, id);
-        return Result.success("删除成功", null);
+        contactService.deleteContact(userId, req.getData().getId());
+        return Result.success("删除成功");
     }
 
-    @GetMapping("/{id}")
+    @PostMapping("/detail")
     @Operation(summary = "获取联系人详情", description = "获取指定联系人的详细信息")
-    public Result<ContactVO> getContactDetail(
-            @Parameter(description = "联系人ID") @PathVariable("id") Long id) {
+    public Result<ContactRespVO> detail(@Valid @RequestBody UnifiedRequest<IdReqVO> req) {
         Long userId = UserContext.getUserId();
-        ContactVO vo = contactService.getContactDetail(userId, id);
-        return Result.success(vo);
+        ContactRespVO respVO = contactService.getContactDetail(userId, req.getData().getId());
+        return Result.success(respVO);
     }
 
-    @GetMapping("/list")
+    @PostMapping("/list")
     @Operation(summary = "获取联系人列表", description = "分页查询联系人列表")
-    public Result<PageResult<ContactVO>> getContactList(
-            @Parameter(description = "搜索关键词") @RequestParam(required = false) String keyword,
-            @Parameter(description = "当前页") @RequestParam(defaultValue = "1") Long current,
-            @Parameter(description = "每页条数") @RequestParam(defaultValue = "10") Long size) {
+    public Result<PageResult<ContactRespVO>> list(@Valid @RequestBody UnifiedRequest<ContactListReqVO> req) {
         Long userId = UserContext.getUserId();
-        Page<ContactVO> page = contactService.getContactList(userId, keyword, current, size);
-        return Result.success(PageResult.from(page));
-    }
-
-    @GetMapping("/from-records")
-    @Operation(summary = "从账单获取联系人", description = "从历史账单中提取联系人")
-    public Result<List<ContactVO>> getContactsFromRecords(
-            @Parameter(description = "账单类别ID列表") @RequestParam(required = false) List<Long> categoryIds) {
-        Long userId = UserContext.getUserId();
-        List<ContactVO> contacts = contactService.getContactsFromRecords(userId, categoryIds);
-        return Result.success(contacts);
+        PageResult<ContactRespVO> result = contactService.getContactList(userId, req.getData());
+        return Result.success(result);
     }
 }

@@ -1,10 +1,6 @@
 package com.bookkeeping.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.bookkeeping.common.PageResult;
-import com.bookkeeping.dto.RecordDTO;
-import com.bookkeeping.dto.RecordQueryDTO;
 import com.bookkeeping.entity.Category;
 import com.bookkeeping.entity.Contact;
 import com.bookkeeping.entity.Record;
@@ -14,8 +10,12 @@ import com.bookkeeping.mapper.ContactMapper;
 import com.bookkeeping.mapper.RecordMapper;
 import com.bookkeeping.service.CacheService;
 import com.bookkeeping.service.RecordService;
-import com.bookkeeping.vo.RecordVO;
-import com.bookkeeping.vo.StatisticsVO;
+import com.bookkeeping.vo.req.CreateRecordReqVO;
+import com.bookkeeping.vo.req.RecordListReqVO;
+import com.bookkeeping.vo.req.StatisticsReqVO;
+import com.bookkeeping.vo.req.UpdateRecordReqVO;
+import com.bookkeeping.vo.resp.RecordRespVO;
+import com.bookkeeping.vo.resp.StatisticsRespVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -29,9 +29,6 @@ import java.time.YearMonth;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * 账单服务实现类
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -44,78 +41,69 @@ public class RecordServiceImpl implements RecordService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public RecordVO createRecord(Long userId, RecordDTO recordDTO) {
-        // 验证类别是否存在
-        Category category = categoryMapper.selectById(recordDTO.getCategoryId());
+    public RecordRespVO createRecord(Long userId, CreateRecordReqVO reqVO) {
+        Category category = categoryMapper.selectById(reqVO.getCategoryId());
         if (category == null || category.getDeleted() == 1) {
             throw new BusinessException("类别不存在");
         }
 
-        // 验证类别类型是否匹配
-        if (!category.getType().equals(recordDTO.getType())) {
+        if (!category.getType().equals(reqVO.getType())) {
             throw new BusinessException("类别类型不匹配");
         }
 
         Record record = new Record();
-        BeanUtils.copyProperties(recordDTO, record);
+        BeanUtils.copyProperties(reqVO, record);
         record.setUserId(userId);
 
-        // 如果选择了联系人，自动填充联系人姓名
-        if (recordDTO.getContactId() != null) {
-            Contact contact = contactMapper.selectById(recordDTO.getContactId());
+        if (reqVO.getContactId() != null) {
+            Contact contact = contactMapper.selectById(reqVO.getContactId());
             if (contact != null && contact.getDeleted() == 0 && contact.getUserId().equals(userId)) {
                 record.setContactName(contact.getName());
             }
         }
 
         recordMapper.insert(record);
-
-        // 清除用户统计缓存（账单变动，统计失效）
         cacheService.evictStatistics(userId);
 
-        return convertToVO(record, category.getName());
+        return convertToRespVO(record, category);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public RecordVO updateRecord(Long userId, Long recordId, RecordDTO recordDTO) {
-        Record record = recordMapper.selectById(recordId);
+    public RecordRespVO updateRecord(Long userId, UpdateRecordReqVO reqVO) {
+        Record record = recordMapper.selectById(reqVO.getId());
         if (record == null || record.getDeleted() == 1) {
             throw new BusinessException("账单不存在");
         }
 
-        // 只能修改自己的账单
         if (!record.getUserId().equals(userId)) {
             throw new BusinessException("无权修改该账单");
         }
 
-        // 验证类别是否存在
-        Category category = categoryMapper.selectById(recordDTO.getCategoryId());
-        if (category == null || category.getDeleted() == 1) {
-            throw new BusinessException("类别不存在");
+        if (reqVO.getCategoryId() != null) {
+            Category category = categoryMapper.selectById(reqVO.getCategoryId());
+            if (category == null || category.getDeleted() == 1) {
+                throw new BusinessException("类别不存在");
+            }
+            if (!category.getType().equals(reqVO.getType())) {
+                throw new BusinessException("类别类型不匹配");
+            }
         }
 
-        // 验证类别类型是否匹配
-        if (!category.getType().equals(recordDTO.getType())) {
-            throw new BusinessException("类别类型不匹配");
-        }
+        BeanUtils.copyProperties(reqVO, record, "id", "userId", "createTime");
 
-        BeanUtils.copyProperties(recordDTO, record);
-
-        // 如果选择了联系人，自动填充联系人姓名
-        if (recordDTO.getContactId() != null) {
-            Contact contact = contactMapper.selectById(recordDTO.getContactId());
+        if (reqVO.getContactId() != null) {
+            Contact contact = contactMapper.selectById(reqVO.getContactId());
             if (contact != null && contact.getDeleted() == 0 && contact.getUserId().equals(userId)) {
                 record.setContactName(contact.getName());
             }
         }
 
         recordMapper.updateById(record);
-
-        // 清除用户统计缓存
         cacheService.evictStatistics(userId);
 
-        return convertToVO(record, category.getName());
+        Category category = categoryMapper.selectById(record.getCategoryId());
+        return convertToRespVO(record, category);
     }
 
     @Override
@@ -126,94 +114,72 @@ public class RecordServiceImpl implements RecordService {
             throw new BusinessException("账单不存在");
         }
 
-        // 只能删除自己的账单
         if (!record.getUserId().equals(userId)) {
             throw new BusinessException("无权删除该账单");
         }
 
         recordMapper.deleteById(recordId);
-
-        // 清除用户统计缓存
         cacheService.evictStatistics(userId);
     }
 
     @Override
-    public RecordVO getRecordDetail(Long userId, Long recordId) {
+    public RecordRespVO getRecordDetail(Long userId, Long recordId) {
         Record record = recordMapper.selectById(recordId);
         if (record == null || record.getDeleted() == 1) {
             throw new BusinessException("账单不存在");
         }
 
-        // 只能查看自己的账单
         if (!record.getUserId().equals(userId)) {
             throw new BusinessException("无权查看该账单");
         }
 
         Category category = categoryMapper.selectById(record.getCategoryId());
-        String categoryName = category != null ? category.getName() : "";
-        return convertToVO(record, categoryName);
+        return convertToRespVO(record, category);
     }
 
     @Override
-    public PageResult<RecordVO> getRecordList(Long userId, RecordQueryDTO queryDTO) {
+    public List<RecordRespVO> getRecordList(Long userId, RecordListReqVO reqVO) {
         LambdaQueryWrapper<Record> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Record::getUserId, userId);
         wrapper.eq(Record::getDeleted, 0);
 
-        // 类型筛选
-        if (queryDTO.getType() != null) {
-            wrapper.eq(Record::getType, queryDTO.getType());
+        if (reqVO.getType() != null) {
+            wrapper.eq(Record::getType, reqVO.getType());
         }
 
-        // 类别筛选
-        if (queryDTO.getCategoryId() != null) {
-            wrapper.eq(Record::getCategoryId, queryDTO.getCategoryId());
+        if (reqVO.getCategoryId() != null) {
+            wrapper.eq(Record::getCategoryId, reqVO.getCategoryId());
         }
 
-        // 日期范围筛选
-        if (queryDTO.getStartDate() != null) {
-            wrapper.ge(Record::getRecordDate, queryDTO.getStartDate());
+        if (reqVO.getStartDate() != null) {
+            wrapper.ge(Record::getRecordDate, reqVO.getStartDate());
         }
-        if (queryDTO.getEndDate() != null) {
-            wrapper.le(Record::getRecordDate, queryDTO.getEndDate());
-        }
-
-        // 往来对象姓名模糊查询
-        if (StringUtils.hasText(queryDTO.getContactName())) {
-            wrapper.like(Record::getContactName, queryDTO.getContactName());
+        if (reqVO.getEndDate() != null) {
+            wrapper.le(Record::getRecordDate, reqVO.getEndDate());
         }
 
-        // 按日期倒序排列
+        if (StringUtils.hasText(reqVO.getContactName())) {
+            wrapper.like(Record::getContactName, reqVO.getContactName());
+        }
+
         wrapper.orderByDesc(Record::getRecordDate);
         wrapper.orderByDesc(Record::getCreateTime);
 
-        Page<Record> page = new Page<>(queryDTO.getCurrent(), queryDTO.getSize());
-        Page<Record> recordPage = recordMapper.selectPage(page, wrapper);
+        List<Record> records = recordMapper.selectList(wrapper);
 
-        List<RecordVO> records = recordPage.getRecords().stream()
+        return records.stream()
                 .map(r -> {
                     Category category = categoryMapper.selectById(r.getCategoryId());
-                    String categoryName = category != null ? category.getName() : "";
-                    return convertToVO(r, categoryName);
+                    return convertToRespVO(r, category);
                 })
                 .collect(Collectors.toList());
-
-        Page<RecordVO> resultPage = new Page<>();
-        resultPage.setCurrent(recordPage.getCurrent());
-        resultPage.setSize(recordPage.getSize());
-        resultPage.setTotal(recordPage.getTotal());
-        resultPage.setPages(recordPage.getPages());
-        resultPage.setRecords(records);
-
-        return PageResult.from(resultPage);
     }
 
     @Override
-    public StatisticsVO getStatistics(Long userId, RecordQueryDTO queryDTO) {
-        LocalDate startDate = queryDTO.getStartDate();
-        LocalDate endDate = queryDTO.getEndDate();
+    public StatisticsRespVO getStatistics(Long userId, StatisticsReqVO reqVO) {
+        LocalDate startDate = reqVO.getStartDate();
+        LocalDate endDate = reqVO.getEndDate();
 
-        // 如果没有指定日期范围，默认统计当月
         if (startDate == null || endDate == null) {
             YearMonth now = YearMonth.now();
             startDate = now.atDay(1);
@@ -223,20 +189,18 @@ public class RecordServiceImpl implements RecordService {
         final LocalDate finalStartDate = startDate;
         final LocalDate finalEndDate = endDate;
 
-        // 尝试从缓存获取统计数据
         BigDecimal cachedIncome = cacheService.getStatistics(userId, 1, finalStartDate, finalEndDate);
         BigDecimal cachedExpense = cacheService.getStatistics(userId, 2, finalStartDate, finalEndDate);
 
         if (cachedIncome != null && cachedExpense != null) {
             log.debug("统计缓存命中: userId={}", userId);
-            StatisticsVO statisticsVO = new StatisticsVO();
-            statisticsVO.setTotalIncome(cachedIncome);
-            statisticsVO.setTotalExpense(cachedExpense);
-            statisticsVO.setBalance(cachedIncome.subtract(cachedExpense));
-            return statisticsVO;
+            return StatisticsRespVO.builder()
+                    .totalIncome(cachedIncome)
+                    .totalExpense(cachedExpense)
+                    .balance(cachedIncome.subtract(cachedExpense))
+                    .build();
         }
 
-        // 缓存未命中，从数据库查询
         BigDecimal totalIncome = recordMapper.sumAmountByDateRange(userId, 1, finalStartDate, finalEndDate);
         if (totalIncome == null) {
             totalIncome = BigDecimal.ZERO;
@@ -247,22 +211,30 @@ public class RecordServiceImpl implements RecordService {
             totalExpense = BigDecimal.ZERO;
         }
 
-        // 写入缓存
         cacheService.cacheStatistics(userId, 1, finalStartDate, finalEndDate, totalIncome);
         cacheService.cacheStatistics(userId, 2, finalStartDate, finalEndDate, totalExpense);
 
-        StatisticsVO statisticsVO = new StatisticsVO();
-        statisticsVO.setTotalIncome(totalIncome);
-        statisticsVO.setTotalExpense(totalExpense);
-        statisticsVO.setBalance(totalIncome.subtract(totalExpense));
-
-        return statisticsVO;
+        return StatisticsRespVO.builder()
+                .totalIncome(totalIncome)
+                .totalExpense(totalExpense)
+                .balance(totalIncome.subtract(totalExpense))
+                .build();
     }
 
-    private RecordVO convertToVO(Record record, String categoryName) {
-        RecordVO vo = new RecordVO();
-        BeanUtils.copyProperties(record, vo);
-        vo.setCategoryName(categoryName);
-        return vo;
+    private RecordRespVO convertToRespVO(Record record, Category category) {
+        return RecordRespVO.builder()
+                .id(record.getId())
+                .categoryId(record.getCategoryId())
+                .categoryName(category != null ? category.getName() : "")
+                .categoryIcon(category != null ? category.getIcon() : "")
+                .type(record.getType())
+                .amount(record.getAmount())
+                .contactId(record.getContactId())
+                .contactName(record.getContactName())
+                .recordDate(record.getRecordDate())
+                .remark(record.getRemark())
+                .createTime(record.getCreateTime())
+                .updateTime(record.getUpdateTime())
+                .build();
     }
 }

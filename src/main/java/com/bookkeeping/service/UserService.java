@@ -1,44 +1,24 @@
 package com.bookkeeping.service;
 
-import com.bookkeeping.dto.LoginRequestDTO;
-import com.bookkeeping.dto.UpdateUserDTO;
-import com.bookkeeping.dto.WxLoginDTO;
 import com.bookkeeping.vo.LoginVO;
 import com.bookkeeping.vo.UserVO;
+import com.bookkeeping.vo.req.LoginReqVO;
+import com.bookkeeping.vo.req.UserUpdateReqVO;
+import com.bookkeeping.vo.resp.LoginRespVO;
+import com.bookkeeping.vo.resp.UserRespVO;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
-/**
- * 用户服务接口
- */
 public interface UserService {
 
-    /**
-     * 微信小程序登录
-     */
-    LoginVO wxLogin(WxLoginDTO loginDTO) throws JsonProcessingException;
+    LoginRespVO wxLogin(LoginReqVO loginVO) throws JsonProcessingException;
 
-    /**
-     * 微信小程序登录（带设备信息）
-     */
-    LoginVO wxLoginWithDevice(LoginRequestDTO loginRequest) throws JsonProcessingException;
+    LoginVO wxLoginWithDevice(LoginReqVO loginVO) throws JsonProcessingException;
 
-    /**
-     * 获取当前用户信息
-     */
-    UserVO getCurrentUser(Long userId);
+    UserRespVO getCurrentUser(Long userId);
 
-    /**
-     * 更新用户信息
-     */
-    UserVO updateUser(Long userId, UpdateUserDTO updateDTO);
+    UserRespVO updateUser(Long userId, UserUpdateReqVO updateVO);
 
-    /**
-     * 用户登出
-     */
     void logout(Long userId);
 
-    /**
-     * 强制用户下线（使所有token失效）
-     */
     void forceLogout(Long userId);
 }

@@ -2,7 +2,6 @@ package com.bookkeeping.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.bookkeeping.dto.MyEventDTO;
 import com.bookkeeping.entity.Contact;
 import com.bookkeeping.entity.MyEvent;
 import com.bookkeeping.entity.Record;
@@ -11,14 +10,17 @@ import com.bookkeeping.mapper.ContactMapper;
 import com.bookkeeping.mapper.MyEventMapper;
 import com.bookkeeping.mapper.RecordMapper;
 import com.bookkeeping.service.MyEventService;
-import com.bookkeeping.vo.ContactVO;
-import com.bookkeeping.vo.MyEventVO;
+import com.bookkeeping.vo.req.CreateEventReqVO;
+import com.bookkeeping.vo.req.EventListReqVO;
+import com.bookkeeping.vo.req.UpdateEventReqVO;
+import com.bookkeeping.vo.resp.ContactRespVO;
+import com.bookkeeping.vo.resp.EventRespVO;
+import com.bookkeeping.vo.resp.PageResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -39,22 +41,22 @@ public class MyEventServiceImpl implements MyEventService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public MyEventVO createEvent(Long userId, MyEventDTO dto) {
+    public EventRespVO createEvent(Long userId, CreateEventReqVO reqVO) {
         MyEvent event = new MyEvent();
-        BeanUtils.copyProperties(dto, event);
+        BeanUtils.copyProperties(reqVO, event);
         event.setUserId(userId);
         event.setPushStatus(0);
-        if (dto.getAdvanceDays() == null) {
+        if (reqVO.getAdvanceDays() == null) {
             event.setAdvanceDays(3);
         }
         myEventMapper.insert(event);
-        return convertToVO(event);
+        return convertToRespVO(event);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public MyEventVO updateEvent(Long userId, Long id, MyEventDTO dto) {
-        MyEvent event = myEventMapper.selectById(id);
+    public EventRespVO updateEvent(Long userId, UpdateEventReqVO reqVO) {
+        MyEvent event = myEventMapper.selectById(reqVO.getId());
         if (event == null || event.getDeleted() == 1) {
             throw new BusinessException("事件不存在");
         }
@@ -62,12 +64,12 @@ public class MyEventServiceImpl implements MyEventService {
             throw new BusinessException("无权操作该事件");
         }
 
-        BeanUtils.copyProperties(dto, event);
-        if (dto.getAdvanceDays() == null) {
+        BeanUtils.copyProperties(reqVO, event, "id", "userId", "createTime", "pushStatus", "pushTime");
+        if (reqVO.getAdvanceDays() == null) {
             event.setAdvanceDays(3);
         }
         myEventMapper.updateById(event);
-        return convertToVO(event);
+        return convertToRespVO(event);
     }
 
     @Override
@@ -84,38 +86,40 @@ public class MyEventServiceImpl implements MyEventService {
     }
 
     @Override
-    public MyEventVO getEventDetail(Long userId, Long id) {
+    public EventRespVO getEventDetail(Long userId, Long id) {
         MyEvent event = myEventMapper.selectById(id);
         if (event == null || event.getDeleted() == 1 || !event.getUserId().equals(userId)) {
             throw new BusinessException("事件不存在");
         }
-        return convertToVO(event);
+        return convertToRespVO(event);
     }
 
     @Override
-    public Page<MyEventVO> getEventList(Long userId, Integer status, Long current, Long size) {
+    public PageResult<EventRespVO> getEventList(Long userId, EventListReqVO reqVO) {
         LambdaQueryWrapper<MyEvent> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(MyEvent::getUserId, userId);
         wrapper.eq(MyEvent::getDeleted, 0);
-        if (status != null) {
-            wrapper.eq(MyEvent::getPushStatus, status);
+        if (reqVO != null && reqVO.getStatus() != null) {
+            wrapper.eq(MyEvent::getPushStatus, reqVO.getStatus());
         }
         wrapper.orderByDesc(MyEvent::getEventDate);
         wrapper.orderByDesc(MyEvent::getCreateTime);
 
+        Long current = reqVO != null && reqVO.getCurrent() != null ? reqVO.getCurrent() : 1L;
+        Long size = reqVO != null && reqVO.getSize() != null ? reqVO.getSize() : 10L;
+
         Page<MyEvent> page = new Page<>(current, size);
         Page<MyEvent> eventPage = myEventMapper.selectPage(page, wrapper);
 
-        Page<MyEventVO> resultPage = new Page<>(eventPage.getCurrent(), eventPage.getSize(), eventPage.getTotal());
-        List<MyEventVO> voList = eventPage.getRecords().stream()
-                .map(this::convertToVO)
+        List<EventRespVO> voList = eventPage.getRecords().stream()
+                .map(this::convertToRespVO)
                 .collect(Collectors.toList());
-        resultPage.setRecords(voList);
-        return resultPage;
+
+        return PageResult.of(voList, eventPage.getTotal(), current, size);
     }
 
     @Override
-    public List<MyEventVO> getEventsToPush() {
+    public List<MyEvent> getEventsToPush() {
         LocalDate today = LocalDate.now();
 
         List<MyEvent> allEvents = myEventMapper.selectList(
@@ -135,7 +139,7 @@ public class MyEventServiceImpl implements MyEventService {
             }
         }
 
-        return eventsToPush.stream().map(this::convertToVO).collect(Collectors.toList());
+        return eventsToPush;
     }
 
     @Override
@@ -149,41 +153,18 @@ public class MyEventServiceImpl implements MyEventService {
         }
     }
 
-    private MyEventVO convertToVO(MyEvent event) {
-        MyEventVO vo = new MyEventVO();
-        BeanUtils.copyProperties(event, vo);
-
-        List<ContactVO> contacts = getContactsWhoReceivedGifts(event.getUserId());
-        vo.setContacts(contacts);
-
-        return vo;
-    }
-
-    private List<ContactVO> getContactsWhoReceivedGifts(Long userId) {
-        LambdaQueryWrapper<Record> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Record::getUserId, userId);
-        wrapper.eq(Record::getType, 2);
-        wrapper.eq(Record::getDeleted, 0);
-        wrapper.isNotNull(Record::getContactId);
-
-        List<Record> records = recordMapper.selectList(wrapper);
-
-        Set<Long> contactIds = new HashSet<>();
-        for (Record record : records) {
-            if (record.getContactId() != null) {
-                contactIds.add(record.getContactId());
-            }
-        }
-
-        if (contactIds.isEmpty()) {
-            return new ArrayList<>();
-        }
-
-        List<Contact> contacts = contactMapper.selectBatchIds(contactIds);
-        return contacts.stream().map(contact -> {
-            ContactVO vo = new ContactVO();
-            BeanUtils.copyProperties(contact, vo);
-            return vo;
-        }).collect(Collectors.toList());
+    private EventRespVO convertToRespVO(MyEvent event) {
+        return EventRespVO.builder()
+                .id(event.getId())
+                .userId(event.getUserId())
+                .title(event.getTitle())
+                .eventType(event.getEventType())
+                .eventDate(event.getEventDate())
+                .location(event.getLocation())
+                .remark(event.getRemark())
+                .advanceDays(event.getAdvanceDays())
+                .status(event.getPushStatus())
+                .createTime(event.getCreateTime())
+                .build();
     }
 }

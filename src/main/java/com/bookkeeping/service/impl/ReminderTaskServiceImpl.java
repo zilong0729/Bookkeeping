@@ -2,7 +2,6 @@ package com.bookkeeping.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.bookkeeping.dto.ReminderTaskDTO;
 import com.bookkeeping.entity.ReminderTask;
 import com.bookkeeping.entity.User;
 import com.bookkeeping.exception.BusinessException;
@@ -10,8 +9,8 @@ import com.bookkeeping.mapper.ReminderTaskMapper;
 import com.bookkeeping.mapper.UserMapper;
 import com.bookkeeping.service.ContactService;
 import com.bookkeeping.service.ReminderTaskService;
-import com.bookkeeping.vo.ContactVO;
-import com.bookkeeping.vo.ReminderTaskVO;
+import com.bookkeeping.vo.req.*;
+import com.bookkeeping.vo.resp.*;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -40,36 +39,28 @@ public class ReminderTaskServiceImpl implements ReminderTaskService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public ReminderTaskVO createTask(Long userId, ReminderTaskDTO dto) {
+    public ReminderTaskRespVO createTask(Long userId, CreateReminderTaskReqVO reqVO) {
         ReminderTask task = new ReminderTask();
-        BeanUtils.copyProperties(dto, task);
+        BeanUtils.copyProperties(reqVO, task);
         task.setUserId(userId);
         task.setStatus(0);
 
-        if (dto.getContactIds() != null && !dto.getContactIds().isEmpty()) {
+        if (reqVO.getContactIds() != null && !reqVO.getContactIds().isEmpty()) {
             try {
-                task.setContactIds(objectMapper.writeValueAsString(dto.getContactIds()));
+                task.setContactIds(objectMapper.writeValueAsString(reqVO.getContactIds()));
             } catch (Exception e) {
                 log.error("序列化contactIds失败", e);
             }
         }
 
-        if (dto.getCategoryIds() != null && !dto.getCategoryIds().isEmpty()) {
-            try {
-                task.setCategoryIds(objectMapper.writeValueAsString(dto.getCategoryIds()));
-            } catch (Exception e) {
-                log.error("序列化categoryIds失败", e);
-            }
-        }
-
         reminderTaskMapper.insert(task);
-        return convertToVO(task);
+        return convertToRespVO(task);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public ReminderTaskVO updateTask(Long userId, Long id, ReminderTaskDTO dto) {
-        ReminderTask task = reminderTaskMapper.selectById(id);
+    public ReminderTaskRespVO updateTask(Long userId, UpdateReminderTaskReqVO reqVO) {
+        ReminderTask task = reminderTaskMapper.selectById(reqVO.getId());
         if (task == null || task.getDeleted() == 1) {
             throw new BusinessException("任务不存在");
         }
@@ -80,26 +71,18 @@ public class ReminderTaskServiceImpl implements ReminderTaskService {
             throw new BusinessException("只有待发送的任务才能修改");
         }
 
-        BeanUtils.copyProperties(dto, task);
+        BeanUtils.copyProperties(reqVO, task);
 
-        if (dto.getContactIds() != null && !dto.getContactIds().isEmpty()) {
+        if (reqVO.getContactIds() != null && !reqVO.getContactIds().isEmpty()) {
             try {
-                task.setContactIds(objectMapper.writeValueAsString(dto.getContactIds()));
+                task.setContactIds(objectMapper.writeValueAsString(reqVO.getContactIds()));
             } catch (Exception e) {
                 log.error("序列化contactIds失败", e);
             }
         }
 
-        if (dto.getCategoryIds() != null && !dto.getCategoryIds().isEmpty()) {
-            try {
-                task.setCategoryIds(objectMapper.writeValueAsString(dto.getCategoryIds()));
-            } catch (Exception e) {
-                log.error("序列化categoryIds失败", e);
-            }
-        }
-
         reminderTaskMapper.updateById(task);
-        return convertToVO(task);
+        return convertToRespVO(task);
     }
 
     @Override
@@ -116,36 +99,38 @@ public class ReminderTaskServiceImpl implements ReminderTaskService {
     }
 
     @Override
-    public ReminderTaskVO getTaskDetail(Long userId, Long id) {
+    public ReminderTaskRespVO getTaskDetail(Long userId, Long id) {
         ReminderTask task = reminderTaskMapper.selectById(id);
         if (task == null || task.getDeleted() == 1 || !task.getUserId().equals(userId)) {
             throw new BusinessException("任务不存在");
         }
-        return convertToVO(task);
+        return convertToRespVO(task);
     }
 
     @Override
-    public Page<ReminderTaskVO> getTaskList(Long userId, Integer status, Long current, Long size) {
+    public PageResult<ReminderTaskRespVO> getTaskList(Long userId, ReminderTaskListReqVO reqVO) {
         LambdaQueryWrapper<ReminderTask> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ReminderTask::getUserId, userId);
         wrapper.eq(ReminderTask::getDeleted, 0);
 
-        if (status != null) {
-            wrapper.eq(ReminderTask::getStatus, status);
+        if (reqVO.getStatus() != null) {
+            wrapper.eq(ReminderTask::getStatus, reqVO.getStatus());
         }
 
         wrapper.orderByDesc(ReminderTask::getRemindDate);
         wrapper.orderByDesc(ReminderTask::getCreateTime);
 
+        Long current = reqVO.getCurrent() != null ? reqVO.getCurrent() : 1L;
+        Long size = reqVO.getSize() != null ? reqVO.getSize() : 10L;
+        
         Page<ReminderTask> page = new Page<>(current, size);
         Page<ReminderTask> taskPage = reminderTaskMapper.selectPage(page, wrapper);
 
-        Page<ReminderTaskVO> resultPage = new Page<>(taskPage.getCurrent(), taskPage.getSize(), taskPage.getTotal());
-        List<ReminderTaskVO> voList = taskPage.getRecords().stream()
-                .map(this::convertToVO)
+        List<ReminderTaskRespVO> voList = taskPage.getRecords().stream()
+                .map(this::convertToRespVO)
                 .collect(Collectors.toList());
-        resultPage.setRecords(voList);
-        return resultPage;
+
+        return PageResult.of(voList, taskPage.getTotal(), taskPage.getCurrent(), taskPage.getSize());
     }
 
     @Override
@@ -167,7 +152,7 @@ public class ReminderTaskServiceImpl implements ReminderTaskService {
     }
 
     @Override
-    public List<ReminderTaskVO> getPendingTasks() {
+    public List<ReminderTask> getPendingTasks() {
         LocalDate today = LocalDate.now();
         LambdaQueryWrapper<ReminderTask> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ReminderTask::getStatus, 0);
@@ -175,8 +160,7 @@ public class ReminderTaskServiceImpl implements ReminderTaskService {
         wrapper.le(ReminderTask::getRemindDate, today);
         wrapper.orderByAsc(ReminderTask::getRemindDate);
 
-        List<ReminderTask> tasks = reminderTaskMapper.selectList(wrapper);
-        return tasks.stream().map(this::convertToVO).collect(Collectors.toList());
+        return reminderTaskMapper.selectList(wrapper);
     }
 
     @Override
@@ -214,30 +198,20 @@ public class ReminderTaskServiceImpl implements ReminderTaskService {
         return sb.toString();
     }
 
-    private ReminderTaskVO convertToVO(ReminderTask task) {
-        ReminderTaskVO vo = new ReminderTaskVO();
-        BeanUtils.copyProperties(task, vo);
+    private ReminderTaskRespVO convertToRespVO(ReminderTask task) {
+        ReminderTaskRespVO respVO = new ReminderTaskRespVO();
+        BeanUtils.copyProperties(task, respVO);
 
         if (StringUtils.hasText(task.getContactIds())) {
             try {
                 List<Long> contactIds = objectMapper.readValue(task.getContactIds(), new TypeReference<List<Long>>() {});
-                vo.setContactIds(contactIds);
-                List<ContactVO> contacts = contactService.getContactsByIds(contactIds);
-                vo.setContacts(contacts);
+                List<ContactRespVO> contacts = contactService.getContactsByIds(contactIds);
+                respVO.setContacts(contacts);
             } catch (Exception e) {
                 log.error("反序列化contactIds失败", e);
             }
         }
 
-        if (StringUtils.hasText(task.getCategoryIds())) {
-            try {
-                List<Long> categoryIds = objectMapper.readValue(task.getCategoryIds(), new TypeReference<List<Long>>() {});
-                vo.setCategoryIds(categoryIds);
-            } catch (Exception e) {
-                log.error("反序列化categoryIds失败", e);
-            }
-        }
-
-        return vo;
+        return respVO;
     }
 }

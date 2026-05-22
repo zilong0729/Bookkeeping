@@ -1,20 +1,24 @@
 package com.bookkeeping.controller;
 
 import com.bookkeeping.annotation.OperLog;
-import com.bookkeeping.common.PageResult;
-import com.bookkeeping.common.Result;
-import com.bookkeeping.dto.RecordDTO;
-import com.bookkeeping.dto.RecordQueryDTO;
 import com.bookkeeping.service.RecordService;
 import com.bookkeeping.utils.UserContext;
-import com.bookkeeping.vo.RecordVO;
-import com.bookkeeping.vo.StatisticsVO;
+import com.bookkeeping.vo.req.CreateRecordReqVO;
+import com.bookkeeping.vo.req.IdReqVO;
+import com.bookkeeping.vo.req.RecordListReqVO;
+import com.bookkeeping.vo.req.StatisticsReqVO;
+import com.bookkeeping.vo.req.UnifiedRequest;
+import com.bookkeeping.vo.req.UpdateRecordReqVO;
+import com.bookkeeping.vo.resp.RecordRespVO;
+import com.bookkeeping.vo.resp.Result;
+import com.bookkeeping.vo.resp.StatisticsRespVO;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/record")
@@ -27,55 +31,51 @@ public class RecordController {
     @PostMapping
     @OperLog("创建账单")
     @Operation(summary = "创建账单", description = "创建一条新的账单记录")
-    public Result<RecordVO> createRecord(@Valid @RequestBody RecordDTO recordDTO) {
+    public Result<RecordRespVO> create(@Valid @RequestBody UnifiedRequest<CreateRecordReqVO> req) {
         Long userId = UserContext.getUserId();
-        RecordVO vo = recordService.createRecord(userId, recordDTO);
-        return Result.success("创建成功", vo);
+        RecordRespVO respVO = recordService.createRecord(userId, req.getData());
+        return Result.success("创建成功", respVO);
     }
 
-    @PutMapping("/{id}")
+    @PostMapping("/update")
     @OperLog("更新账单")
     @Operation(summary = "更新账单", description = "更新指定的账单记录")
-    public Result<RecordVO> updateRecord(
-            @Parameter(description = "账单ID") @PathVariable("id") Long recordId,
-            @Valid @RequestBody RecordDTO recordDTO) {
+    public Result<RecordRespVO> update(@Valid @RequestBody UnifiedRequest<UpdateRecordReqVO> req) {
         Long userId = UserContext.getUserId();
-        RecordVO vo = recordService.updateRecord(userId, recordId, recordDTO);
-        return Result.success("更新成功", vo);
+        RecordRespVO respVO = recordService.updateRecord(userId, req.getData());
+        return Result.success("更新成功", respVO);
     }
 
-    @DeleteMapping("/{id}")
+    @PostMapping("/delete")
     @OperLog("删除账单")
     @Operation(summary = "删除账单", description = "删除指定的账单记录")
-    public Result<Void> deleteRecord(
-            @Parameter(description = "账单ID") @PathVariable("id") Long recordId) {
+    public Result<Void> delete(@Valid @RequestBody UnifiedRequest<IdReqVO> req) {
         Long userId = UserContext.getUserId();
-        recordService.deleteRecord(userId, recordId);
-        return Result.success("删除成功", null);
+        recordService.deleteRecord(userId, req.getData().getId());
+        return Result.success("删除成功");
     }
 
-    @GetMapping("/{id}")
+    @PostMapping("/detail")
     @Operation(summary = "获取账单详情", description = "获取指定账单的详细信息")
-    public Result<RecordVO> getRecordDetail(
-            @Parameter(description = "账单ID") @PathVariable("id") Long recordId) {
+    public Result<RecordRespVO> detail(@Valid @RequestBody UnifiedRequest<IdReqVO> req) {
         Long userId = UserContext.getUserId();
-        RecordVO vo = recordService.getRecordDetail(userId, recordId);
-        return Result.success(vo);
+        RecordRespVO respVO = recordService.getRecordDetail(userId, req.getData().getId());
+        return Result.success(respVO);
     }
 
-    @GetMapping("/list")
+    @PostMapping("/list")
     @Operation(summary = "获取账单列表", description = "分页查询账单记录")
-    public Result<PageResult<RecordVO>> getRecordList(RecordQueryDTO queryDTO) {
+    public Result<List<RecordRespVO>> list(@Valid @RequestBody UnifiedRequest<RecordListReqVO> req) {
         Long userId = UserContext.getUserId();
-        PageResult<RecordVO> result = recordService.getRecordList(userId, queryDTO);
-        return Result.success(result);
+        List<RecordRespVO> list = recordService.getRecordList(userId, req.getData());
+        return Result.success(list);
     }
 
-    @GetMapping("/statistics")
+    @PostMapping("/statistics")
     @Operation(summary = "获取统计数据", description = "获取指定时间段的收支统计数据")
-    public Result<StatisticsVO> getStatistics(RecordQueryDTO queryDTO) {
+    public Result<StatisticsRespVO> statistics(@Valid @RequestBody UnifiedRequest<StatisticsReqVO> req) {
         Long userId = UserContext.getUserId();
-        StatisticsVO statistics = recordService.getStatistics(userId, queryDTO);
+        StatisticsRespVO statistics = recordService.getStatistics(userId, req.getData());
         return Result.success(statistics);
     }
 }
