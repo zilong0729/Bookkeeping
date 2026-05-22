@@ -29,6 +29,9 @@ public class RecordVO {
     @Schema(description = "联系人")
     private String contactName;
 
+    @Schema(description = "联系人ID")
+    private Long contactId;
+
     @Schema(description = "账单日期")
     private LocalDate recordDate;
 

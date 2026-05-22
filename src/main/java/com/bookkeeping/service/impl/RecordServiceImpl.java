@@ -6,9 +6,11 @@ import com.bookkeeping.common.PageResult;
 import com.bookkeeping.dto.RecordDTO;
 import com.bookkeeping.dto.RecordQueryDTO;
 import com.bookkeeping.entity.Category;
+import com.bookkeeping.entity.Contact;
 import com.bookkeeping.entity.Record;
 import com.bookkeeping.exception.BusinessException;
 import com.bookkeeping.mapper.CategoryMapper;
+import com.bookkeeping.mapper.ContactMapper;
 import com.bookkeeping.mapper.RecordMapper;
 import com.bookkeeping.service.CacheService;
 import com.bookkeeping.service.RecordService;
@@ -38,6 +40,7 @@ public class RecordServiceImpl implements RecordService {
     private final RecordMapper recordMapper;
     private final CategoryMapper categoryMapper;
     private final CacheService cacheService;
+    private final ContactMapper contactMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -56,6 +59,14 @@ public class RecordServiceImpl implements RecordService {
         Record record = new Record();
         BeanUtils.copyProperties(recordDTO, record);
         record.setUserId(userId);
+
+        // 如果选择了联系人，自动填充联系人姓名
+        if (recordDTO.getContactId() != null) {
+            Contact contact = contactMapper.selectById(recordDTO.getContactId());
+            if (contact != null && contact.getDeleted() == 0 && contact.getUserId().equals(userId)) {
+                record.setContactName(contact.getName());
+            }
+        }
 
         recordMapper.insert(record);
 
@@ -90,6 +101,15 @@ public class RecordServiceImpl implements RecordService {
         }
 
         BeanUtils.copyProperties(recordDTO, record);
+
+        // 如果选择了联系人，自动填充联系人姓名
+        if (recordDTO.getContactId() != null) {
+            Contact contact = contactMapper.selectById(recordDTO.getContactId());
+            if (contact != null && contact.getDeleted() == 0 && contact.getUserId().equals(userId)) {
+                record.setContactName(contact.getName());
+            }
+        }
+
         recordMapper.updateById(record);
 
         // 清除用户统计缓存

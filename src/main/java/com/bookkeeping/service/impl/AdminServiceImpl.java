@@ -57,13 +57,33 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     public LoginVO adminLogin(AdminLoginDTO loginDTO) {
+        // 检查登录失败次数
+        String loginFailKey = "login_fail:admin:" + loginDTO.getUsername();
+        Object failCountObj = redisUtil.get(loginFailKey);
+        int failCount = failCountObj != null ? Integer.parseInt(failCountObj.toString()) : 0;
+        
+        if (failCount >= 5) {
+            throw new BusinessException("登录失败次数过多，请15分钟后再试");
+        }
+
         // 校验管理员账号密码
+        boolean loginSuccess = true;
         if (!adminUsername.equals(loginDTO.getUsername())) {
-            throw new BusinessException("用户名或密码错误");
+            loginSuccess = false;
         }
         if (!adminPassword.equals(loginDTO.getPassword())) {
-            throw new BusinessException("用户名或密码错误");
+            loginSuccess = false;
         }
+
+        if (!loginSuccess) {
+            // 记录失败次数
+            failCount++;
+            redisUtil.set(loginFailKey, failCount, 15, TimeUnit.MINUTES);
+            throw new BusinessException("用户名或密码错误，剩余尝试次数：" + (5 - failCount));
+        }
+
+        // 登录成功，清除失败计数
+        redisUtil.delete(loginFailKey);
 
         // 查找或创建管理员用户记录
         User adminUser = findOrCreateAdmin();

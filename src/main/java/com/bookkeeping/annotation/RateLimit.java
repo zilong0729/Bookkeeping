@@ -4,7 +4,7 @@ import java.lang.annotation.*;
 
 /**
  * 接口限流注解
- * 基于Guava RateLimiter实现
+ * 基于Redis滑动窗口实现分布式限流
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
@@ -12,15 +12,15 @@ import java.lang.annotation.*;
 public @interface RateLimit {
 
     /**
-     * 每秒允许的请求数
+     * 窗口内允许的最大请求数
      */
     double permitsPerSecond() default 10.0;
 
     /**
-     * 获取许可等待超时时间（毫秒）
-     * 默认100ms，超过则限流
+     * 窗口大小（毫秒）
+     * 默认1000ms（1秒）
      */
-    long timeout() default 100;
+    long windowMs() default 1000;
 
     /**
      * 提示信息

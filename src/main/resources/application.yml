@@ -98,6 +98,12 @@ wx:
     app-id: your-app-id
     app-secret: your-app-secret
 
+# 微信订阅消息配置
+wechat:
+  app-id: your-app-id
+  app-secret: your-app-secret
+  template-id: your-subscribe-template-id
+
 # JWT配置
 jwt:
   secret: your-secret-key-here-must-be-at-least-256-bits-long-for-security

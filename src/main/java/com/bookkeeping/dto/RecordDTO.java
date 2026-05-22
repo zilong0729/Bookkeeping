@@ -27,6 +27,9 @@ public class RecordDTO {
     @Schema(description = "联系人")
     private String contactName;
 
+    @Schema(description = "联系人ID")
+    private Long contactId;
+
     @Schema(description = "账单日期", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "日期不能为空")
     private LocalDate recordDate;

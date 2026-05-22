@@ -49,6 +49,11 @@ public class Record {
     private String contactName;
 
     /**
+     * 关联联系人ID
+     */
+    private Long contactId;
+
+    /**
      * 账单日期
      */
     private LocalDate recordDate;
