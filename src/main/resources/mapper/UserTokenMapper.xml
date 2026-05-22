@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bookkeeping.mapper.UserTokenMapper">
+
+    <select id="selectByToken" resultType="com.bookkeeping.entity.UserToken">
+        SELECT * FROM user_token 
+        WHERE token = #{token} AND status = 1 AND deleted = 0
+    </select>
+
+    <select id="selectValidByUserId" resultType="com.bookkeeping.entity.UserToken">
+        SELECT * FROM user_token 
+        WHERE user_id = #{userId} AND status = 1 AND deleted = 0
+        ORDER BY login_time DESC
+    </select>
+
+    <select id="countLoginByUserId" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM user_token 
+        WHERE user_id = #{userId} AND deleted = 0
+    </select>
+
+    <update id="invalidateByUserId">
+        UPDATE user_token 
+        SET status = 0, update_time = NOW() 
+        WHERE user_id = #{userId} AND status = 1 AND deleted = 0
+    </update>
+
+    <select id="selectByDeviceId" resultType="com.bookkeeping.entity.UserToken">
+        SELECT * FROM user_token 
+        WHERE user_id = #{userId} AND device_id = #{deviceId} AND deleted = 0
+    </select>
+
+    <update id="updateLastActiveTime">
+        UPDATE user_token 
+        SET last_active_time = #{lastActiveTime}, update_time = #{lastActiveTime} 
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+</mapper>
