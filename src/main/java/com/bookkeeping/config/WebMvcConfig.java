@@ -20,14 +20,24 @@ public class WebMvcConfig implements WebMvcConfigurer {
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/**")
                 .excludePathPatterns(
+                        // 公开接口
                         "/user/login",
                         "/user/register",
                         "/admin/login",
+                        // 监控接口（无需认证）
+                        "/monitor/**",
+                        // Swagger/API文档
                         "/doc.html",
                         "/webjars/**",
                         "/swagger-ui/**",
+                        "/swagger-ui.html",
                         "/v3/api-docs/**",
-                        "/favicon.ico"
+                        "/swagger-resources/**",
+                        // Druid监控
+                        "/druid/**",
+                        // 静态资源
+                        "/favicon.ico",
+                        "/error"
                 );
     }
 }
