@@ -69,6 +69,10 @@ public class UserServiceImpl implements UserService {
             userMapper.insert(user);
             firstLogin = true;
             log.info("创建新用户: userId={}, openid={}", user.getId(), openid);
+        } else {
+            if (user.getStatus() == 0) {
+                throw new BusinessException("账号已被禁用,请联系管理员");
+            }
         }
 
         String token = jwtUtil.generateToken(user.getId(), openid, user.getRole());
@@ -99,6 +103,9 @@ public class UserServiceImpl implements UserService {
         if (user == null) {
             throw new BusinessException("用户不存在");
         }
+        if (user.getStatus() == 0) {
+            throw new BusinessException("账号已被禁用,请联系管理员");
+        }
         return convertToRespVO(user);
     }
 
@@ -108,6 +115,9 @@ public class UserServiceImpl implements UserService {
         User user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException("用户不存在");
+        }
+        if (user.getStatus() == 0) {
+            throw new BusinessException("账号已被禁用");
         }
 
         if (updateVO.getNickname() != null) {

@@ -4,6 +4,7 @@ import com.bookkeeping.vo.resp.Result;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -26,7 +27,19 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 处理参数校验异常
+     * 处理参数校验异常(MethodArgumentNotValidException)
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public Result<Void> handleMethodArgumentNotValidException(MethodArgumentNotValidException e) {
+        String message = e.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .collect(Collectors.joining(", "));
+        log.warn("参数校验失败: {}", message);
+        return Result.error(message);
+    }
+
+    /**
+     * 处理参数校验异常(BindException)
      */
     @ExceptionHandler(BindException.class)
     public Result<Void> handleBindException(BindException e) {

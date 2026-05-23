@@ -58,7 +58,7 @@ public class Result<T> {
     public static <T> Result<T> success(String message) {
         return Result.<T>builder()
                 .code(200)
-                .message("操作成功")
+                .message(message)
                 .timestamp(LocalDateTime.now())
                 .build();
     }

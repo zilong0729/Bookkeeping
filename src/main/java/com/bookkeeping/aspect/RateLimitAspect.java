@@ -3,6 +3,7 @@ package com.bookkeeping.aspect;
 import com.bookkeeping.annotation.RateLimit;
 import com.bookkeeping.exception.BusinessException;
 import com.bookkeeping.utils.RedisUtil;
+import com.bookkeeping.utils.UserContext;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,8 +18,8 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.lang.reflect.Method;
 
 /**
- * 限流切面
- * 基于Redis滑动窗口实现分布式接口限流
+ * 限流切面 - 增强版
+ * 支持多维度限流：全局、用户、IP、用户+接口
  */
 @Slf4j
 @Aspect
@@ -30,35 +31,46 @@ public class RateLimitAspect {
 
     @Around("@annotation(rateLimit)")
     public Object around(ProceedingJoinPoint point, RateLimit rateLimit) throws Throwable {
-        // 获取方法签名
         MethodSignature signature = (MethodSignature) point.getSignature();
         Method method = signature.getMethod();
         String className = method.getDeclaringClass().getSimpleName();
         String methodName = method.getName();
 
-        // 获取客户端IP
         String clientIp = getClientIp();
+        Long userId = UserContext.getUserId();
 
-        // 构建限流key：rate_limit:类名.方法名:IP
-        String key = "rate_limit:" + className + "." + methodName + ":" + clientIp;
+        String key = buildLimitKey(rateLimit.limitType(), className, methodName, clientIp, userId);
 
-        // 计算窗口大小和限制次数
         long windowMs = rateLimit.windowMs();
         int limit = (int) Math.ceil(rateLimit.permitsPerSecond());
 
-        // 尝试获取许可
         boolean acquired = redisUtil.tryAcquire(key, windowMs, limit);
         if (!acquired) {
-            log.warn("接口限流触发: key={}, ip={}, limit={}/{}ms", key, clientIp, limit, windowMs);
+            log.warn("限流触发: type={}, key={}, ip={}, userId={}, limit={}/{}ms",
+                    rateLimit.limitType(), key, clientIp, userId, limit, windowMs);
             throw new BusinessException(429, rateLimit.message());
         }
 
         return point.proceed();
     }
 
-    /**
-     * 获取客户端IP
-     */
+    private String buildLimitKey(RateLimit.LimitType limitType, String className,
+                                String methodName, String clientIp, Long userId) {
+        String baseKey = "rate_limit:" + className + "." + methodName;
+
+        switch (limitType) {
+            case USER:
+                return baseKey + ":user:" + (userId != null ? userId : "anonymous");
+            case IP:
+                return baseKey + ":ip:" + clientIp;
+            case USER_INTERFACE:
+                return baseKey + ":user:" + (userId != null ? userId : "anonymous") + ":ip:" + clientIp;
+            case DEFAULT:
+            default:
+                return baseKey + ":ip:" + clientIp;
+        }
+    }
+
     private String getClientIp() {
         try {
             ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
@@ -77,7 +89,6 @@ public class RateLimitAspect {
             if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
                 ip = request.getRemoteAddr();
             }
-            // 多次代理时取第一个IP
             if (ip != null && ip.contains(",")) {
                 ip = ip.split(",")[0].trim();
             }

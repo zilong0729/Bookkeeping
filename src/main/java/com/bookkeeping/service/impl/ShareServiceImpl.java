@@ -14,6 +14,7 @@ import com.bookkeeping.mapper.ShareInviteMapper;
 import com.bookkeeping.mapper.UserMapper;
 import com.bookkeeping.service.ContactService;
 import com.bookkeeping.service.ShareService;
+import com.bookkeeping.utils.DistributedLockUtil;
 import com.bookkeeping.vo.req.CreateShareReqVO;
 import com.bookkeeping.vo.req.ShareCodeReqVO;
 import com.bookkeeping.vo.resp.EventRespVO;
@@ -28,6 +29,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * 分享服务实现 - 增强并发安全
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -38,6 +42,7 @@ public class ShareServiceImpl implements ShareService {
     private final ContactMapper contactMapper;
     private final UserMapper userMapper;
     private final MyEventMapper myEventMapper;
+    private final DistributedLockUtil lockUtil;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -78,68 +83,139 @@ public class ShareServiceImpl implements ShareService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void acceptShare(Long userId, String shareCode) {
-        LambdaQueryWrapper<ShareInvite> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ShareInvite::getShareCode, shareCode);
-        wrapper.eq(ShareInvite::getDeleted, 0);
+        String lockKey = "accept_share:" + shareCode + ":" + userId;
 
-        ShareInvite shareInvite = shareInviteMapper.selectOne(wrapper);
-        if (shareInvite == null) {
-            throw new BusinessException("分享链接不存在");
-        }
+        boolean lockAcquired = false;
+        try {
+            lockAcquired = lockUtil.tryLockWithWait(lockKey, 5);
+            if (!lockAcquired) {
+                throw new BusinessException("操作进行中，请稍后重试");
+            }
 
-        if (LocalDateTime.now().isAfter(shareInvite.getExpireTime())) {
-            shareInvite.setStatus(2);
+            LambdaQueryWrapper<ShareInvite> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(ShareInvite::getShareCode, shareCode);
+            wrapper.eq(ShareInvite::getDeleted, 0);
+
+            ShareInvite shareInvite = shareInviteMapper.selectOne(wrapper);
+            if (shareInvite == null) {
+                throw new BusinessException("分享链接不存在");
+            }
+
+            if (LocalDateTime.now().isAfter(shareInvite.getExpireTime())) {
+                shareInvite.setStatus(2);
+                shareInviteMapper.updateById(shareInvite);
+                throw new BusinessException("分享链接已过期");
+            }
+
+            if (shareInvite.getStatus() != 0) {
+                throw new BusinessException("分享链接已被接受或已过期");
+            }
+
+            if (shareInvite.getShareUserId().equals(userId)) {
+                throw new BusinessException("不能接受自己的分享");
+            }
+
+            shareInvite.setAcceptUserId(userId);
+            shareInvite.setAcceptTime(LocalDateTime.now());
+            shareInvite.setStatus(1);
             shareInviteMapper.updateById(shareInvite);
-            throw new BusinessException("分享链接已过期");
+
+            createFriendRelation(shareInvite.getShareUserId(), userId);
+            createFriendRelation(userId, shareInvite.getShareUserId());
+
+        } finally {
+            if (lockAcquired) {
+                lockUtil.unlock(lockKey);
+            }
         }
-
-        if (shareInvite.getStatus() != 0) {
-            throw new BusinessException("分享链接已被接受或已过期");
-        }
-
-        if (shareInvite.getShareUserId().equals(userId)) {
-            throw new BusinessException("不能接受自己的分享");
-        }
-
-        shareInvite.setAcceptUserId(userId);
-        shareInvite.setAcceptTime(LocalDateTime.now());
-        shareInvite.setStatus(1);
-        shareInviteMapper.updateById(shareInvite);
-
-        createFriendRelation(shareInvite.getShareUserId(), userId);
-        createFriendRelation(userId, shareInvite.getShareUserId());
     }
 
     private void createFriendRelation(Long userId, Long friendUserId) {
-        LambdaQueryWrapper<FriendRelation> checkWrapper = new LambdaQueryWrapper<>();
-        checkWrapper.eq(FriendRelation::getUserId, userId);
-        checkWrapper.eq(FriendRelation::getFriendUserId, friendUserId);
-        checkWrapper.eq(FriendRelation::getDeleted, 0);
+        String lockKey = "create_friend:" + userId + ":" + friendUserId;
+        boolean lockAcquired = false;
 
-        FriendRelation existing = friendRelationMapper.selectOne(checkWrapper);
-        if (existing != null) {
-            return;
+        try {
+            lockAcquired = lockUtil.tryLock(lockKey, 10);
+            if (!lockAcquired) {
+                log.warn("获取好友关系锁失败: userId={}, friendUserId={}", userId, friendUserId);
+                return;
+            }
+
+            LambdaQueryWrapper<FriendRelation> checkWrapper = new LambdaQueryWrapper<>();
+            checkWrapper.eq(FriendRelation::getUserId, userId);
+            checkWrapper.eq(FriendRelation::getFriendUserId, friendUserId);
+            checkWrapper.eq(FriendRelation::getDeleted, 0);
+
+            FriendRelation existing = friendRelationMapper.selectOne(checkWrapper);
+            if (existing != null) {
+                log.debug("好友关系已存在: userId={}, friendUserId={}", userId, friendUserId);
+                return;
+            }
+
+            User friendUser = userMapper.selectById(friendUserId);
+            if (friendUser == null) {
+                log.error("好友用户不存在: friendUserId={}", friendUserId);
+                return;
+            }
+
+            LambdaQueryWrapper<Contact> contactWrapper = new LambdaQueryWrapper<>();
+            contactWrapper.eq(Contact::getUserId, userId);
+            contactWrapper.eq(Contact::getOpenId, friendUser.getOpenid());
+            contactWrapper.eq(Contact::getDeleted, 0);
+            Contact existingContact = contactMapper.selectOne(contactWrapper);
+
+            Long contactId;
+            if (existingContact != null) {
+                contactId = existingContact.getId();
+                log.debug("联系人已存在: userId={}, contactId={}", userId, contactId);
+            } else {
+                Contact contact = new Contact();
+                contact.setUserId(userId);
+                contact.setName(friendUser.getNickname() != null ? friendUser.getNickname() : "好友");
+                contact.setOpenId(friendUser.getOpenid());
+                contact.setRelation("朋友");
+                contactMapper.insert(contact);
+                contactId = contact.getId();
+                log.debug("创建新联系人: userId={}, contactId={}", userId, contactId);
+            }
+
+            FriendRelation relation = new FriendRelation();
+            relation.setUserId(userId);
+            relation.setFriendUserId(friendUserId);
+            relation.setContactId(contactId);
+            relation.setRelation("朋友");
+            friendRelationMapper.insert(relation);
+
+            log.info("创建好友关系成功: userId={}, friendUserId={}", userId, friendUserId);
+
+        } catch (Exception e) {
+            log.error("创建好友关系失败: userId={}, friendUserId={}", userId, friendUserId, e);
+            throw e;
+        } finally {
+            if (lockAcquired) {
+                lockUtil.unlock(lockKey);
+            }
         }
-
-        User friendUser = userMapper.selectById(friendUserId);
-
-        Contact contact = new Contact();
-        contact.setUserId(userId);
-        contact.setName(friendUser.getNickname() != null ? friendUser.getNickname() : "好友");
-        contact.setOpenId(friendUser.getOpenid());
-        contact.setRelation("朋友");
-        contactMapper.insert(contact);
-
-        FriendRelation relation = new FriendRelation();
-        relation.setUserId(userId);
-        relation.setFriendUserId(friendUserId);
-        relation.setContactId(contact.getId());
-        relation.setRelation("朋友");
-        friendRelationMapper.insert(relation);
     }
 
     private String generateShareCode() {
-        return UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        String shareCode;
+        int attempts = 0;
+        do {
+            shareCode = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+            attempts++;
+            if (attempts > 10) {
+                throw new BusinessException("生成分享码失败，请重试");
+            }
+        } while (isShareCodeExists(shareCode));
+        return shareCode;
+    }
+
+    private boolean isShareCodeExists(String shareCode) {
+        LambdaQueryWrapper<ShareInvite> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ShareInvite::getShareCode, shareCode);
+        wrapper.eq(ShareInvite::getDeleted, 0);
+        return shareInviteMapper.selectCount(wrapper) > 0;
     }
 
     private ShareRespVO convertToRespVO(ShareInvite shareInvite) {
